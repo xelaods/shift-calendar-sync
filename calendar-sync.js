@@ -92,7 +92,12 @@ function generateEventId(shift) {
  * OAuth2 クライアントを作成
  */
 function createOAuth2Client() {
-  if (!fs.existsSync(CREDENTIALS_PATH)) {
+  let credentials;
+  if (process.env.GOOGLE_CREDENTIALS) {
+    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  } else if (fs.existsSync(CREDENTIALS_PATH)) {
+    credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
+  } else {
     console.error('❌ credentials.json が見つかりません。');
     console.error('');
     console.error('Google Cloud Console で OAuth2 クライアントIDを作成し、');
@@ -106,7 +111,6 @@ function createOAuth2Client() {
     process.exit(1);
   }
 
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
   const { client_id, client_secret } = credentials.installed || credentials.web;
   const redirect_uri = `http://localhost:${REDIRECT_PORT}/callback`;
 
@@ -168,6 +172,11 @@ async function authenticate(oauth2Client) {
  * 保存済みトークンを読み込む
  */
 function loadToken(oauth2Client) {
+  if (process.env.GOOGLE_TOKEN) {
+    const tokens = JSON.parse(process.env.GOOGLE_TOKEN);
+    oauth2Client.setCredentials(tokens);
+    return true;
+  }
   if (!fs.existsSync(TOKEN_PATH)) {
     return false;
   }

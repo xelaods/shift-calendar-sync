@@ -22,10 +22,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Create credentials and token
-        run: |
-          printenv GOOGLE_CREDENTIALS > credentials.json
-          printenv GOOGLE_TOKEN > token.json
-
       - name: Sync shifts to Google Calendar
         run: node calendar-sync.js
