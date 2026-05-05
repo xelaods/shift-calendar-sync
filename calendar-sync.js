@@ -93,8 +93,9 @@ function generateEventId(shift) {
  */
 function createOAuth2Client() {
   let credentials;
-  if (process.env.GOOGLE_CREDENTIALS) {
-    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  if (process.env.GOOGLE_CREDENTIALS_B64) {
+    const jsonStr = Buffer.from(process.env.GOOGLE_CREDENTIALS_B64, 'base64').toString('utf-8');
+    credentials = JSON.parse(jsonStr);
   } else if (fs.existsSync(CREDENTIALS_PATH)) {
     credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
   } else {
@@ -172,8 +173,9 @@ async function authenticate(oauth2Client) {
  * 保存済みトークンを読み込む
  */
 function loadToken(oauth2Client) {
-  if (process.env.GOOGLE_TOKEN) {
-    const tokens = JSON.parse(process.env.GOOGLE_TOKEN);
+  if (process.env.GOOGLE_TOKEN_B64) {
+    const jsonStr = Buffer.from(process.env.GOOGLE_TOKEN_B64, 'base64').toString('utf-8');
+    const tokens = JSON.parse(jsonStr);
     oauth2Client.setCredentials(tokens);
     return true;
   }
