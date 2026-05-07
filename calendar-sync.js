@@ -199,7 +199,7 @@ async function getExistingEvents(calendar, timeMin, timeMax) {
     timeMax: timeMax,
     singleEvents: true,
     orderBy: 'startTime',
-    q: 'バイト（葛西店 レジ）',
+    q: '鈍器',
   });
   return res.data.items || [];
 }
@@ -214,7 +214,7 @@ async function addShiftToCalendar(calendar, shift) {
 
   const event = {
     id: eventId,
-    summary: 'バイト（葛西店 レジ）',
+    summary: '鈍器',
     description: `葛西店 / レジ シフト\n${shift.start} ～ ${shift.end}`,
     location: '葛西店',
     start: {
