@@ -14,7 +14,10 @@ async function scrapeShifts() {
   }
 
   console.log('🌐 ブラウザを起動しています...');
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch({ 
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+  });
   const page = await browser.newPage();
   
   // ログインページへ
