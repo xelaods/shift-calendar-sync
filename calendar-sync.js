@@ -66,8 +66,20 @@ function toRFC3339(dateStr, timeStr) {
  * 当日から指定日数分のシフトを取得
  */
 function getUpcomingShifts(shifts, days) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // 現在時刻をJSTとして取得し、今日の0時0分を作成
+  const now = new Date();
+  const jstFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = jstFormatter.formatToParts(now);
+  const year = parts.find(p => p.type === 'year').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const day = parts.find(p => p.type === 'day').value;
+  
+  const today = new Date(`${year}-${month}-${day}T00:00:00+09:00`);
 
   const endDate = new Date(today);
   endDate.setDate(endDate.getDate() + days);
@@ -199,7 +211,7 @@ async function getExistingEvents(calendar, timeMin, timeMax) {
     timeMax: timeMax,
     singleEvents: true,
     orderBy: 'startTime',
-    q: '鈍器',
+    q: 'ドンキ',
   });
   return res.data.items || [];
 }
@@ -214,7 +226,7 @@ async function addShiftToCalendar(calendar, shift) {
 
   const event = {
     id: eventId,
-    summary: '鈍器',
+    summary: 'ドンキ',
     description: `葛西店 / レジ シフト\n${shift.start} ～ ${shift.end}`,
     location: '葛西店',
     start: {

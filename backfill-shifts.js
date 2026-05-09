@@ -67,7 +67,7 @@ async function main() {
 
     const event = {
       id: eventId,
-      summary: 'バイト（葛西店 レジ）',
+      summary: 'ドンキ',
       description: `葛西店 / レジ シフト\n${shift.start} ～ ${shift.end}`,
       location: '葛西店',
       start: { dateTime: startDateTime, timeZone: 'Asia/Tokyo' },
