@@ -1,0 +1,28 @@
+# 認証情報・トークン（Gitに含めない）
+.env
+credentials.json
+token.json
+service_account.json
+
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# 仮想環境
+venv/
+.venv/
+env/
+
+# ログ
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# デバッグ用一時ファイル
+debug_*.png
+debug_*.html
+first_run_done.flag

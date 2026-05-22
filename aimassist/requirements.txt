@@ -1,0 +1,11 @@
+# エイムアシスト - 必要なライブラリ
+
+# インストールコマンド:
+# pip install ultralytics opencv-python dxcam numpy pywin32
+
+ultralytics
+opencv-python
+dxcam
+numpy
+pywin32
+pyserial
