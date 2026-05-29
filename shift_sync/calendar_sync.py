@@ -184,9 +184,7 @@ class GoogleCalendarSync:
         if end_dt <= start_dt:
             end_dt += timedelta(days=1)
 
-        title = f"{SHIFT_EVENT_PREFIX} {shift.start_time}〜{shift.end_time}"
-        if shift.store_name:
-            title += f" @{shift.store_name}"
+        title = SHIFT_EVENT_PREFIX
 
         description_lines = [
             f"シフコンから自動取得したシフトです。",

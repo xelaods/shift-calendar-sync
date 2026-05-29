@@ -63,7 +63,8 @@ class ShifuconScraper:
         return raw
 
     def _create_driver(self) -> webdriver.Chrome:
-        """Chrome WebDriverを作成して返す"""
+        """Chrome WebDriverを作成して返す（Windows/Linux両対応）"""
+        import sys
         options = Options()
         if self.headless:
             options.add_argument("--headless=new")
@@ -80,9 +81,16 @@ class ShifuconScraper:
         options.add_experimental_option("excludeSwitches", ["enable-logging", "enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
 
-        driver_path = self._find_chromedriver_exe()
-        service = Service(executable_path=driver_path)
-        driver = webdriver.Chrome(service=service, options=options)
+        if sys.platform == "win32":
+            # Windows: wdm キャッシュから chromedriver.exe を検索
+            driver_path = self._find_chromedriver_exe()
+            service = Service(executable_path=driver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            # Linux/Mac (GitHub Actions など): Selenium Manager が自動検出
+            print("[スクレイパー] Linux環境: Selenium Manager で ChromeDriver を自動検出します")
+            driver = webdriver.Chrome(options=options)
+
         # ページロードタイムアウトを60秒に設定（デフォルトは30秒）
         driver.set_page_load_timeout(60)
         # navigator.webdriver フラグを隠す
@@ -310,38 +318,52 @@ class ShifuconScraper:
                              old_span: tuple) -> Optional[tuple[date, date]]:
         """
         ナビゲーションボタン (date-back / date-next) をクリックし、
-        AJAX更新が完了して新しいスパンが読み込まれるまで待つ。
+        ページ遷移が完了して新しいスパンが読み込まれるまで待つ。
+
+        eccube.setModeAndSubmit を使ったフォームサブミット（フルページ遷移）のため、
+        遷移中の例外はスキップして最大60秒ポーリングする。
 
         old_span の開始日と異なるスパンが取得できたら返す。
-        タイムアウト (10秒) した場合は None を返す。
+        タイムアウト (60秒) した場合は None を返す。
         """
         old_start_str = old_span[0].strftime("%Y%m%d") if old_span else None
 
         try:
             btn = driver.find_element(By.ID, btn_id)
-            btn.click()
+            # JavaScript クリックを優先（jQuery イベントハンドラを発火させる）
+            try:
+                driver.execute_script("arguments[0].click();", btn)
+            except Exception:
+                btn.click()
         except NoSuchElementException:
             print(f"[スクレイパー] ボタン #{btn_id} が見つかりません")
             return None
         except TimeoutException:
-            print(f"[スクレイパー] ボタン #{btn_id} クリック中にレンダラータイムアウト")
-            return None
+            # フォームサブミットによるページ遷移のタイムアウト → 続行
+            print(f"[スクレイパー] ボタン #{btn_id} クリック中にページロードタイムアウト（ポーリング継続）")
         except Exception as e:
             print(f"[スクレイパー] ボタン #{btn_id} クリック中にエラー: {e}")
             return None
 
-        # 最大10秒、0.5秒ごとにポーリング
-        for _ in range(20):
-            time.sleep(0.5)
+        # フォームサブミット後のページ遷移が始まるまで少し待つ
+        time.sleep(3)
+
+        # 最大60秒、1秒ごとにポーリング
+        # ページ遷移中の例外 (StaleElementReferenceException 等) はスキップして継続
+        for attempt in range(60):
             try:
                 span = self._get_current_span(driver)
+                if span and (old_start_str is None or
+                             span[0].strftime("%Y%m%d") != old_start_str):
+                    print(f"[スクレイパー] {attempt+1}秒後にスパン更新を確認")
+                    return span
             except Exception:
-                return None
-            if span and (old_start_str is None or
-                         span[0].strftime("%Y%m%d") != old_start_str):
-                return span
+                # ページ遷移中は例外が発生しうるのでスキップ
+                pass
+            time.sleep(1)
 
         # タイムアウト: 最後の試みを返す
+        print(f"[スクレイパー] ボタン #{btn_id} 後のスパン更新が60秒以内に確認できませんでした")
         try:
             return self._get_current_span(driver)
         except Exception:
