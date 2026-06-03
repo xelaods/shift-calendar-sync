@@ -8,72 +8,22 @@ workflows:
         - unity
       vars:
         UNITY_PROJECT_PATH: "UnityApp/ShiftSync"
-        UNITY_VERSION: "6000.0.23f1"
     scripts:
-      - name: Activate Unity License
+      - name: Build Unity iOS Project
         script: |
-          echo "🌐 Unity公式認証ツールを直接取得します..."
-          # Unity公式のライセンスツール（最新版）を強制的にダウンロードしてインストールします
-          curl -o UnitySetup.pkg https://download.unity3d.com/download_unity/hub/ some_link_or_tool_if_needed
-          # 💡 もし公式ツールが見つからない場合を想定し、Unity本体の認証プログラムを直接叩いて安全にログインさせます
-          echo "🚀 Unityアカウントへの直接ログインを試行します..."
-          
-          # Unity 6本体に直接メールとパスワードを流し込んで、外部ツールを通さずに認証します
+          echo "🏗️ ライセンス認証を兼ねて、Unityビルドを直接開始します..."
           $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
             -batchmode \
             -nographics \
             -quit \
             -username "$UNITY_EMAIL" \
-            -password "$UNITY_PASSWORD"
-          
-          echo "✅ ライセンス認証ステップを強制通過しました"
-      - name: Build Unity iOS Project
-        script: |
-          echo "🏗️ Unityビルド（iOSプロジェクト出力）を開始します..."
-          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
-            -batchmode \
-            -nographics \
-            -quit \
+            -password "$UNITY_PASSWORD" \
             -projectPath "$UNITY_PROJECT_PATH" \
             -buildTarget iOS \
             -executeMethod UnityEditor.BuildPlayerWindow.Build
       - name: Build .ipa with Xcode
         script: |
-          echo "📦 Xcodeプロジェクトを .ipa ファイルに変換します..."
-          xcode-project build-ipa \
-            --workspace "build/iOS/iOS/Unity-iPhone.xcworkspace" \
-            --scheme "Unity-iPhone"
-    artifacts:
-      - build/iOS/iOS/*.ipaworkflows:
-  unity-ios-workflow:
-    name: Unity iOS Build Workflow
-    max_build_duration: 90
-    instance_type: mac_mini_m2 # 👈 M2環境に自動で合わせています
-    environment:
-      groups:
-        - unity
-      vars:
-        UNITY_PROJECT_PATH: "UnityApp/ShiftSync"
-        UNITY_VERSION: "6000.0.23f1"
-    scripts:
-      - name: Activate Unity License
-        script: |
-          echo "🚀 Unityの認証を開始します..."
-          # 【修正】Codemagicの最新仕様に合わせて正しいアクティベート処理を行います
-          codemagic-unity-tool activate --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD"
-      - name: Build Unity iOS Project
-        script: |
-          echo "🏗️ Unityビルド（iOSプロジェクト出力）を開始します..."
-          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
-            -batchmode \
-            -nographics \
-            -quit \
-            -projectPath "$UNITY_PROJECT_PATH" \
-            -buildTarget iOS \
-            -executeMethod UnityEditor.BuildPlayerWindow.Build
-      - name: Build .ipa with Xcode
-        script: |
-          echo "📦 Xcodeプロジェクトを .ipa ファイルに変換します..."
+          echo "📦 Xcodeプロジェクトを .ipa に変換します..."
           xcode-project build-ipa \
             --workspace "build/iOS/iOS/Unity-iPhone.xcworkspace" \
             --scheme "Unity-iPhone"
