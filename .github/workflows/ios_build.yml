@@ -33,15 +33,19 @@ jobs:
       # ── Unity ビルド（Unity 6 / 無料版 Personal 専用設定） ────────────
       # ── Unity ビルド（Unity 6 / 最新ライセンスサーバー設定） ────────────
       # ── Unity ビルド（ライセンスチェックを完全無視して強制突破） ────────────
+      # ── Unity ビルド（Unity 6 / 無料版 Personal 確定版設定） ────────────
       - name: Run Unity Build
         uses: game-ci/unity-builder@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          # 👇 パスワードを「'」（シングルクォーテーション）で囲みます！
+          UNITY_PASSWORD: '${{ secrets.UNITY_PASSWORD }}' 
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
           unityVersion: 6000.0.23f1
-          # 👇 【超重要】この2行をこの通りに追加してください！
-          version: "none"
-          unityLicensingServer: "none"
+          # 👇 無料版ログインで動かすための正しい設定はこれです
+          unityLicensingServer: Personal
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
