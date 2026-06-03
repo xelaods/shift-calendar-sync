@@ -2,10 +2,10 @@ workflows:
   unity-ios-workflow:
     name: Unity iOS Build Workflow
     max_build_duration: 90
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2 # 👈 M2環境に自動で合わせています
     environment:
       groups:
-        - unity # 👈 あとでCodemagicに入力するメール・パスワードのグループ名
+        - unity
       vars:
         UNITY_PROJECT_PATH: "UnityApp/ShiftSync"
         UNITY_VERSION: "6000.0.23f1"
@@ -13,8 +13,8 @@ workflows:
       - name: Activate Unity License
         script: |
           echo "🚀 Unityの認証を開始します..."
-          # Codemagicの仕組みを使って、無料アカウントで安全にログインします
-          unity-authenticator
+          # 【修正】Codemagicの最新仕様に合わせて正しいアクティベート処理を行います
+          codemagic-unity-tool activate --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD"
       - name: Build Unity iOS Project
         script: |
           echo "🏗️ Unityビルド（iOSプロジェクト出力）を開始します..."
@@ -28,7 +28,6 @@ workflows:
       - name: Build .ipa with Xcode
         script: |
           echo "📦 Xcodeプロジェクトを .ipa ファイルに変換します..."
-          # 署名なし（無料）で強制的に .ipa ファイルを組み立てるコマンドです
           xcode-project build-ipa \
             --workspace "build/iOS/iOS/Unity-iPhone.xcworkspace" \
             --scheme "Unity-iPhone"
