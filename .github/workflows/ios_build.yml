@@ -30,16 +30,15 @@ jobs:
             Library-iOS-
             Library-
 
-      # ── Unity ビルド（ライセンスチェックを完全に回避） ────────────
-      # ── Unity ビルド（GameCI v4 / 完全なライセンスファイル認証） ────────────
+      # ── Unity ビルド（Unity 6 / 無料版 Personal 専用設定） ────────────
       - name: Run Unity Build
         uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }} # 👈 これだけにします！
+        # 💡 env: の項目（EMAILやPASSWORD、LICENSEなど）はすべて削除して完全に無くします！
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
           unityVersion: 6000.0.23f1
+          unityLicensingServer: "https://license.unity.com" # 👈 【超重要】これをこのまま追加します！
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
