@@ -1,0 +1,28 @@
+# Unity
+UnityApp/ShiftSync/Library/
+UnityApp/ShiftSync/Temp/
+UnityApp/ShiftSync/Logs/
+UnityApp/ShiftSync/UserSettings/
+UnityApp/ShiftSync/obj/
+UnityApp/ShiftSync/Build/
+UnityApp/ShiftSync/*.csproj
+UnityApp/ShiftSync/*.sln
+
+# Python
+shift_sync/__pycache__/
+shift_sync/**/__pycache__/
+shift_sync/*.pyc
+shift_sync/shiftsync.db
+shift_sync/debug_*.html
+shift_sync/debug_*.png
+shift_sync/first_run_done.flag
+
+# 機密ファイル（絶対にコミットしない）
+shift_sync/.env
+shift_sync/credentials.json
+shift_sync/token.json
+shift_sync/service_account.json
+
+# OS
+.DS_Store
+Thumbs.db
