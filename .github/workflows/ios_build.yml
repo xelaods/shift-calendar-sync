@@ -36,11 +36,12 @@ jobs:
       # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
       # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
       # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
+      # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
       - name: Run Unity Build
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}       # 👈 LICENSEの代わりにこれを入れる！
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }} # 👈 これを入れる！
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: "${{ secrets.UNITY_PASSWORD }}" # 👈 【修正】このように「"」で囲みます！
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
