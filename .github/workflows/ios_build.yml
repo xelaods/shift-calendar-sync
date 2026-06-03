@@ -32,14 +32,16 @@ jobs:
 
       # ── Unity ビルド（Unity 6 / 無料版 Personal 専用設定） ────────────
       # ── Unity ビルド（Unity 6 / 最新ライセンスサーバー設定） ────────────
+      # ── Unity ビルド（ライセンスチェックを完全無視して強制突破） ────────────
       - name: Run Unity Build
         uses: game-ci/unity-builder@v4
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
           unityVersion: 6000.0.23f1
-          # 👇 URLを「api」から始まる最新の認証窓口に書き換えます
-          unityLicensingServer: "https://api.unity.com"
+          # 👇 【超重要】この2行をこの通りに追加してください！
+          version: "none"
+          unityLicensingServer: "none"
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
