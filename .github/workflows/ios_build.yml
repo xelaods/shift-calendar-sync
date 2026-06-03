@@ -38,7 +38,7 @@ jobs:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
           unityVersion: 6000.0.23f1
-          unityLicensingServer: "https://license.unity.com/" # 👈 【超重要】これをこのまま追加します！
+          unityLicensingServer: "https://license.unity.com" # 👈 【超重要】これをこのまま追加します！
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
