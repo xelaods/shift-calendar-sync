@@ -1,0 +1,78 @@
+name: iOS Build
+
+on:
+  workflow_dispatch:   # 手動実行のみ（毎pushはしない）
+  push:
+    branches: [main]
+    paths:
+      - 'UnityApp/ShiftSync/**'  # UnityApp変更時のみ実行
+
+jobs:
+  build:
+    name: Build for iOS
+    runs-on: macos-latest   # macOSランナー（無料枠あり）
+    timeout-minutes: 60
+
+    steps:
+      # ── リポジトリをチェックアウト ──────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      # ── Unity ライセンスをキャッシュ ────────────────────────────
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: UnityApp/ShiftSync/Library
+          key: Library-iOS-${{ hashFiles('UnityApp/ShiftSync/Assets/**', 'UnityApp/ShiftSync/Packages/**') }}
+          restore-keys: |
+            Library-iOS-
+            Library-
+
+      # ── Unity でビルド（GameCI） ─────────────────────────────────
+      - name: Build Unity project for iOS
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE:    ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:      ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD:   ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath:      UnityApp/ShiftSync
+          targetPlatform:   iOS
+          buildName:        ShiftSync
+          versioning:       Semantic
+
+      # ── Xcodeプロジェクトを .ipa に変換 ─────────────────────────
+      - name: Build .ipa with xcodebuild
+        run: |
+          cd build/iOS/iOS
+          xcodebuild \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath ShiftSync.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+          xcodebuild \
+            -exportArchive \
+            -archivePath ShiftSync.xcarchive \
+            -exportPath ./ipa \
+            -exportOptionsPlist ../../../UnityApp/ShiftSync/ExportOptions.plist \
+            || true
+          # 署名なしの場合は .app を直接 .ipa に変換
+          cd ShiftSync.xcarchive/Products/Applications
+          mkdir -p Payload
+          cp -r ShiftSync.app Payload/
+          zip -r ../../../ipa/ShiftSync.ipa Payload/
+
+      # ── .ipa をアーティファクトとしてアップロード ────────────────
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShiftSync-iOS-${{ github.run_number }}
+          path: build/iOS/iOS/ipa/ShiftSync.ipa
+          retention-days: 14
