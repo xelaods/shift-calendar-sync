@@ -34,13 +34,15 @@ jobs:
       #    Unity Personal は UNITY_EMAIL + UNITY_PASSWORD のみで動作
       #    UNITY_LICENSE（.ulf）は不要（新ライセンスシステム）
       # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
+      # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
       - name: Run Unity Build
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }} # 👈 GitHubのSecretsに登録した中身がここに入ります
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
           targetPlatform: iOS
-          projectPath: UnityApp/ShiftSync             # 👈 【超重要】プロジェクトのパスを追加！
+          projectPath: UnityApp/ShiftSync
+          unityVersion: 6000.4.9f1  # 👈 【追加】あなたのUnityのバージョンを直接指定
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
