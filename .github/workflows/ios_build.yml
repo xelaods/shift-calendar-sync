@@ -42,7 +42,7 @@ jobs:
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
-          unityVersion: 6000.0.076f1  # 👈 【追加】あなたのUnityのバージョンを直接指定
+          unityVersion: 6000.0.76f1  # 👈 【追加】あなたのUnityのバージョンを直接指定
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
