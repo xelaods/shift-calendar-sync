@@ -33,16 +33,12 @@ jobs:
       # ── Unity ビルド（GameCI v4 / Personal ライセンス） ────────────
       #    Unity Personal は UNITY_EMAIL + UNITY_PASSWORD のみで動作
       #    UNITY_LICENSE（.ulf）は不要（新ライセンスシステム）
-      - name: Build Unity → iOS (Xcode project)
+      - name: Run Unity Build
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }} # 👈 これが必要です！
         with:
-          projectPath:    UnityApp/ShiftSync
           targetPlatform: iOS
-          buildName:      ShiftSync
-          versioning:     None
 
       # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
