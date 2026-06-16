@@ -11,6 +11,12 @@ import sys
 import argparse
 from datetime import datetime, date, timedelta
 
+# Windows環境でのUnicodeEncodeErrorを防ぐため、stdout/stderrをUTF-8に設定
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from scraper import ShifuconScraper
 from calendar_sync import GoogleCalendarSync
 
@@ -123,11 +129,11 @@ def main():
 
     # ─── 5. 結果表示 ───
     print("\n" + "=" * 55)
-    print("  ✅ 完了!")
+    print("  [完了] 同期完了!")
     print(f"  追加: {result['added']} 件")
     print(f"  スキップ（既登録）: {result['skipped']} 件")
     if result["errors"] > 0:
-        print(f"  ⚠️  エラー: {result['errors']} 件")
+        print(f"  [警告] エラー: {result['errors']} 件")
     print("=" * 55)
 
 

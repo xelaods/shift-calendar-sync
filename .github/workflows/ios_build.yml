@@ -1,13 +1,16 @@
 name: iOS Build
 
 on:
-  workflow_dispatch:  # 手動実行
+  workflow_dispatch:
   push:
     branches: [master]
     paths:
       - 'UnityApp/ShiftSync/Assets/**'
       - 'UnityApp/ShiftSync/Packages/**'
       - 'UnityApp/ShiftSync/ProjectSettings/**'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Node.js 24 対応
 
 jobs:
   build:
@@ -16,11 +19,9 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      # ── チェックアウト ──────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Library キャッシュ（2回目以降を高速化） ─────────────────────
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
@@ -30,30 +31,23 @@ jobs:
             Library-iOS-
             Library-
 
-      # ── Unity ビルド（Unity 6 / 無料版 Personal 専用設定） ────────────
-      # ── Unity ビルド（Unity 6 / 最新ライセンスサーバー設定） ────────────
-      # ── Unity ビルド（ライセンスチェックを完全無視して強制突破） ────────────
-      # ── Unity ビルド（Unity 6 / 無料版 Personal 確定版設定） ────────────
-      - name: Run Unity Build
+      # UNITY_LICENSE = C:\ProgramData\Unity\Unity_lic.ulf の内容
+      - name: Build Unity → iOS
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          # 👇 パスワードを「'」（シングルクォーテーション）で囲みます！
-          UNITY_PASSWORD: '${{ secrets.UNITY_PASSWORD }}' 
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           targetPlatform: iOS
           projectPath: UnityApp/ShiftSync
           unityVersion: 6000.0.23f1
-          # 👇 無料版ログインで動かすための正しい設定はこれです
           unityLicensingServer: Personal
 
-      # ── Xcodeプロジェクト → .ipa（署名なし） ───────────────────────
       - name: Archive & export .ipa (no signing)
         run: |
           set -e
           BUILD_DIR="build/iOS/iOS"
-
-          # xcodeproj が存在するか確認
           ls "$BUILD_DIR"
 
           xcodebuild \
@@ -69,16 +63,14 @@ jobs:
             DEVELOPMENT_TEAM="" \
             | tail -20
 
-          # .xcarchive → Payload → .ipa
           APP_PATH="$BUILD_DIR/ShiftSync.xcarchive/Products/Applications/ShiftSync.app"
           IPA_DIR="$BUILD_DIR/ipa"
           mkdir -p "$IPA_DIR/Payload"
           cp -r "$APP_PATH" "$IPA_DIR/Payload/"
           cd "$IPA_DIR"
           zip -qr ShiftSync.ipa Payload/
-          echo "✅ IPA 生成完了: $IPA_DIR/ShiftSync.ipa"
+          echo "✅ IPA 生成完了"
 
-      # ── アーティファクトとしてアップロード ──────────────────────────
       - name: Upload .ipa
         uses: actions/upload-artifact@v4
         with:

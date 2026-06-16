@@ -1,0 +1,14 @@
+# 既存の requirements.txt に追加するAPI用パッケージ
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+apscheduler>=3.10.0
+firebase-admin>=6.5.0
+python-dotenv>=1.0.0
+# 既存パッケージ（再掲）
+selenium>=4.20.0
+webdriver-manager>=4.0.0
+google-api-python-client>=2.0.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.0.0

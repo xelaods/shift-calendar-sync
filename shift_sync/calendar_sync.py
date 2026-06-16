@@ -174,6 +174,44 @@ class GoogleCalendarSync:
                                     datetime.min.time().replace(hour=h % 24, minute=m))
         return datetime.combine(base_date, datetime.min.time().replace(hour=h, minute=m))
 
+    def delete_all_shift_events(self) -> dict:
+        """
+        ShiftSync タグが付いたGoogleカレンダーのイベントをすべて削除する。
+        戻り値: {"deleted": int, "errors": int}
+        """
+        result = {"deleted": 0, "errors": 0}
+        page_token = None
+
+        print("[カレンダー] ShiftSync イベントを検索・削除中...")
+        while True:
+            events_result = self.service.events().list(
+                calendarId=GOOGLE_CALENDAR_ID,
+                singleEvents=True,
+                maxResults=250,
+                pageToken=page_token,
+            ).execute()
+
+            for event in events_result.get("items", []):
+                ext_props = event.get("extendedProperties", {}).get("private", {})
+                if ext_props.get("source") == SHIFT_EVENT_TAG:
+                    try:
+                        self.service.events().delete(
+                            calendarId=GOOGLE_CALENDAR_ID,
+                            eventId=event["id"],
+                        ).execute()
+                        print(f"  [削除] {event.get('summary', '')} ({event.get('id')})")
+                        result["deleted"] += 1
+                    except HttpError as e:
+                        print(f"  [エラー] イベント削除失敗: {e}")
+                        result["errors"] += 1
+
+            page_token = events_result.get("nextPageToken")
+            if not page_token:
+                break
+
+        print(f"[カレンダー] 削除完了: {result['deleted']}件")
+        return result
+
     def _build_event(self, shift: ShiftEntry) -> dict:
         """Google カレンダーイベントのdictを生成する"""
         # 日本時間（JST, UTC+9）でイベントを作成

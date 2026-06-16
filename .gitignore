@@ -26,3 +26,9 @@ shift_sync/service_account.json
 # OS
 .DS_Store
 Thumbs.db
+
+# ShiftSyncApp (React Native / Expo)
+ShiftSyncApp/node_modules/
+ShiftSyncApp/.expo/
+ShiftSyncApp/ios/
+ShiftSyncApp/android/
