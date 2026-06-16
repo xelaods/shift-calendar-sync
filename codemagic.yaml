@@ -5,22 +5,17 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      # ── コード署名 ──────────────────────────────────────────────────
-      # Codemagic ダッシュボードの
-      # [App settings] → [Code signing] → [iOS]
-      # に P12 と Provisioning Profile をアップロードすると
-      # 以下の変数が自動でセットされます:
-      #   CM_CERTIFICATE             (base64 の P12)
-      #   CM_CERTIFICATE_PASSWORD    (P12 のパスワード)
-      #   CM_PROVISIONING_PROFILE    (base64 の .mobileprovision)
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: com.shiftsync.app
-
       # ── Node / Xcode / CocoaPods バージョン ────────────────────────
       node: 20.17.0
       xcode: latest
       cocoapods: default
+      # ── コード署名の変数（Codemagic の Secrets に登録する） ─────────
+      # Settings → Global variables and secrets に以下を登録してください:
+      #   CM_CERTIFICATE          ... P12 を base64 エンコードした文字列
+      #   CM_CERTIFICATE_PASSWORD ... P12 のパスワード（平文）
+      #   CM_PROVISIONING_PROFILE ... .mobileprovision を base64 エンコードした文字列
+      groups:
+        - ios_credentials
 
     scripts:
       # 1. Node 依存関係インストール
@@ -41,19 +36,11 @@ workflows:
           cd ShiftSyncApp/ios
           pod install
 
-      # 4. Keychain を初期化（Codemagic の組み込みコマンド）
+      # 4. Keychain を初期化
       - name: Set up keychain
         script: keychain initialize
 
-      # 5. Provisioning Profile を適切な場所に配置
-      - name: Set up provisioning profile
-        script: |
-          PROFILES_HOME="$HOME/Library/MobileDevice/Provisioning Profiles"
-          mkdir -p "$PROFILES_HOME"
-          echo "${CM_PROVISIONING_PROFILE}" | base64 --decode \
-            > "$PROFILES_HOME/adhoc.mobileprovision"
-
-      # 6. P12 証明書を Keychain に登録
+      # 5. P12 証明書を Keychain に登録
       - name: Set up signing certificate
         script: |
           echo "${CM_CERTIFICATE}" | base64 --decode > /tmp/certificate.p12
@@ -61,12 +48,21 @@ workflows:
             --certificate /tmp/certificate.p12 \
             --certificate-password "${CM_CERTIFICATE_PASSWORD}"
 
+      # 6. Provisioning Profile を配置
+      - name: Set up provisioning profile
+        script: |
+          PROFILES_HOME="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_HOME"
+          echo "${CM_PROVISIONING_PROFILE}" | base64 --decode \
+            > "$PROFILES_HOME/adhoc.mobileprovision"
+
       # 7. ExportOptions.plist を生成（ad-hoc 用）
       - name: Create ExportOptions.plist
         script: |
           PROFILE_UUID=$(grep -a -A 1 'UUID' \
             "$HOME/Library/MobileDevice/Provisioning Profiles/adhoc.mobileprovision" \
             | grep string | sed -e 's/<[^>]*>//g' | xargs)
+          echo "Using profile UUID: $PROFILE_UUID"
 
           cat > /tmp/ExportOptions.plist <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -82,8 +78,6 @@ workflows:
             </dict>
             <key>compileBitcode</key>
             <false/>
-            <key>uploadSymbols</key>
-            <true/>
             <key>thinning</key>
             <string>&lt;none&gt;</string>
           </dict>
@@ -115,9 +109,9 @@ workflows:
 
     # ── 成果物 ─────────────────────────────────────────────────────────
     artifacts:
-      - $CM_BUILD_DIR/ipa/*.ipa          # ← メインの IPA
+      - $CM_BUILD_DIR/ipa/*.ipa
       - $CM_BUILD_DIR/ShiftSync.xcarchive
-      - /tmp/xcodebuild_logs/*.log       # エラー調査用
+      - /tmp/xcodebuild_logs/*.log
 
     # ── ビルド完了通知 ─────────────────────────────────────────────────
     publishing:
