@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.shiftsync.app",
+      "bundleIdentifier": "app.huckleberry924.eggplant2517",
       "buildNumber": "1",
       "infoPlist": {
         "NSUserNotificationUsageDescription": "シフト開始前にリマインダー通知を送ります",
