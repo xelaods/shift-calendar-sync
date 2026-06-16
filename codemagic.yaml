@@ -1,31 +1,129 @@
 workflows:
-  unity-ios-workflow:
-    name: Unity iOS Build Workflow
-    max_build_duration: 90
+  ios-adhoc:
+    name: iOS Ad-hoc (自分のデバイス用 IPA)
+    max_build_duration: 60
     instance_type: mac_mini_m2
+
     environment:
-      groups:
-        - unity
-      vars:
-        UNITY_PROJECT_PATH: "UnityApp/ShiftSync"
+      # ── コード署名 ──────────────────────────────────────────────────
+      # Codemagic ダッシュボードの
+      # [App settings] → [Code signing] → [iOS]
+      # に P12 と Provisioning Profile をアップロードすると
+      # 以下の変数が自動でセットされます:
+      #   CM_CERTIFICATE             (base64 の P12)
+      #   CM_CERTIFICATE_PASSWORD    (P12 のパスワード)
+      #   CM_PROVISIONING_PROFILE    (base64 の .mobileprovision)
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.shiftsync.app
+
+      # ── Node / Xcode / CocoaPods バージョン ────────────────────────
+      node: 20.17.0
+      xcode: latest
+      cocoapods: default
+
     scripts:
-      - name: Build Unity iOS Project
+      # 1. Node 依存関係インストール
+      - name: npm install
         script: |
-          echo "🏗️ ライセンス認証を兼ねて、Unityビルドを直接開始します..."
-          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
-            -batchmode \
-            -nographics \
-            -quit \
-            -username "$UNITY_EMAIL" \
-            -password "$UNITY_PASSWORD" \
-            -projectPath "$UNITY_PROJECT_PATH" \
-            -buildTarget iOS \
-            -executeMethod UnityEditor.BuildPlayerWindow.Build
-      - name: Build .ipa with Xcode
+          cd ShiftSyncApp
+          npm ci
+
+      # 2. Expo prebuild で ios/ ネイティブプロジェクトを生成
+      - name: Expo prebuild
         script: |
-          echo "📦 Xcodeプロジェクトを .ipa に変換します..."
-          xcode-project build-ipa \
-            --workspace "build/iOS/iOS/Unity-iPhone.xcworkspace" \
-            --scheme "Unity-iPhone"
+          cd ShiftSyncApp
+          npx expo prebuild --platform ios --clean --non-interactive
+
+      # 3. CocoaPods
+      - name: pod install
+        script: |
+          cd ShiftSyncApp/ios
+          pod install
+
+      # 4. Keychain を初期化（Codemagic の組み込みコマンド）
+      - name: Set up keychain
+        script: keychain initialize
+
+      # 5. Provisioning Profile を適切な場所に配置
+      - name: Set up provisioning profile
+        script: |
+          PROFILES_HOME="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_HOME"
+          echo "${CM_PROVISIONING_PROFILE}" | base64 --decode \
+            > "$PROFILES_HOME/adhoc.mobileprovision"
+
+      # 6. P12 証明書を Keychain に登録
+      - name: Set up signing certificate
+        script: |
+          echo "${CM_CERTIFICATE}" | base64 --decode > /tmp/certificate.p12
+          keychain add-certificates \
+            --certificate /tmp/certificate.p12 \
+            --certificate-password "${CM_CERTIFICATE_PASSWORD}"
+
+      # 7. ExportOptions.plist を生成（ad-hoc 用）
+      - name: Create ExportOptions.plist
+        script: |
+          PROFILE_UUID=$(grep -a -A 1 'UUID' \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/adhoc.mobileprovision" \
+            | grep string | sed -e 's/<[^>]*>//g' | xargs)
+
+          cat > /tmp/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.shiftsync.app</key>
+              <string>${PROFILE_UUID}</string>
+            </dict>
+            <key>compileBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>thinning</key>
+            <string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          PLIST
+
+      # 8. アーカイブ（.xcarchive）を作成
+      - name: Build archive
+        script: |
+          cd ShiftSyncApp/ios
+          xcodebuild \
+            -workspace ShiftSync.xcworkspace \
+            -scheme ShiftSync \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="adhoc.mobileprovision" \
+            archive | xcpretty
+
+      # 9. .ipa を書き出し
+      - name: Export IPA
+        script: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive" \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -exportPath "$CM_BUILD_DIR/ipa" | xcpretty
+
+    # ── 成果物 ─────────────────────────────────────────────────────────
     artifacts:
-      - build/iOS/iOS/*.ipa
+      - $CM_BUILD_DIR/ipa/*.ipa          # ← メインの IPA
+      - $CM_BUILD_DIR/ShiftSync.xcarchive
+      - /tmp/xcodebuild_logs/*.log       # エラー調査用
+
+    # ── ビルド完了通知 ─────────────────────────────────────────────────
+    publishing:
+      email:
+        recipients:
+          - xelaods@gmail.com
+        notify:
+          success: true
+          failure: true
