@@ -26,3 +26,6 @@ Thumbs.db
 debug_*.png
 debug_*.html
 first_run_done.flag
+
+# データベース（ローカル開発用。本番は /data/ に置く）
+*.db

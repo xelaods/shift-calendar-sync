@@ -1,0 +1,47 @@
+# Render Blueprint — ShiftSync API
+# https://render.com/docs/blueprint-spec
+#
+# 使い方:
+# 1. https://render.com にサインアップ（GitHub連携）
+# 2. New → Blueprint → このリポジトリを選択
+# 3. 環境変数を入力してデプロイ
+#
+# または手動で:
+# New → Web Service → Docker → shift_sync/ をルートに設定
+
+services:
+  - type: web
+    name: shiftsync-api
+    runtime: docker
+    # shift_sync/ ディレクトリをDockerビルドコンテキストに使用
+    rootDir: shift_sync
+    dockerfilePath: ./Dockerfile
+    plan: free          # 有料にするなら starter ($7/月) に変更
+    region: singapore   # 日本から最も近いリージョン
+    branch: master
+    healthCheckPath: /health
+
+    # 環境変数（Renderのダッシュボードで設定すること）
+    envVars:
+      - key: SHIFUCON_STAFF_ID
+        sync: false       # ダッシュボードで入力
+      - key: SHIFUCON_PASSWORD
+        sync: false       # ダッシュボードで入力
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+      - key: SHIFT_EVENT_PREFIX
+        value: ドンキ
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false       # service_account.json をbase64エンコードした文字列
+      - key: DATA_DIR
+        value: /data
+      - key: DATABASE_URL
+        value: sqlite:////data/shiftsync.db
+
+    # 永続ディスク（SQLiteのDBファイルを保存する）
+    # 注意: 無料プランはディスク使用不可。有料プラン($7/月+$0.25/GB/月)が必要
+    # ディスクなしの場合はDBがコンテナ再起動で消えます
+    disk:
+      name: shiftsync-data
+      mountPath: /data
+      sizeGB: 1

@@ -33,16 +33,32 @@ class GoogleCalendarSync:
         """認証を行いカレンダーサービスを返す。
 
         優先順位:
-        1. service_account.json（サービスアカウント方式・推奨）
-        2. credentials.json（OAuth2方式・フォールバック）
+        1. SERVICE_ACCOUNT_JSON 環境変数（base64エンコード）— クラウドデプロイ推奨
+        2. service_account.json ファイル — ローカル開発用
+        3. credentials.json（OAuth2方式）— フォールバック
         """
-        import os
-        sa_file = os.path.join(os.path.dirname(__file__), "service_account.json")
+        import os, base64, tempfile
+        from google.oauth2 import service_account
 
-        # ─── サービスアカウント認証（推奨） ───
+        # ─── 1. 環境変数から読み込む（Render等のクラウド向け） ───
+        sa_json_b64 = os.environ.get("SERVICE_ACCOUNT_JSON", "")
+        if sa_json_b64:
+            print("[カレンダー] 環境変数 SERVICE_ACCOUNT_JSON からサービスアカウント認証を行います...")
+            try:
+                sa_json = base64.b64decode(sa_json_b64).decode("utf-8")
+                sa_info = json.loads(sa_json)
+                creds = service_account.Credentials.from_service_account_info(
+                    sa_info, scopes=SCOPES
+                )
+                print("[カレンダー] 環境変数からサービスアカウント認証成功！")
+                return build("calendar", "v3", credentials=creds)
+            except Exception as e:
+                print(f"[カレンダー] 環境変数からの認証失敗: {e}")
+
+        # ─── 2. ファイルから読み込む（ローカル開発） ───
+        sa_file = os.path.join(os.path.dirname(__file__), "service_account.json")
         if os.path.exists(sa_file):
-            print("[カレンダー] サービスアカウント認証を使用します...")
-            from google.oauth2 import service_account
+            print("[カレンダー] service_account.json からサービスアカウント認証を行います...")
             creds = service_account.Credentials.from_service_account_file(
                 sa_file,
                 scopes=SCOPES,

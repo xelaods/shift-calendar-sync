@@ -226,7 +226,9 @@ def _run_sync(year: int, month: int, sync_to_gcal: bool, db: Session,
     shift_sync_dir = os.path.join(os.path.dirname(__file__), "..", "..")
     sys.path.insert(0, os.path.abspath(shift_sync_dir))
 
-    FLAG_FILE       = os.path.abspath(os.path.join(shift_sync_dir, "first_run_done.flag"))
+    # FLAG_FILE は永続ディスク（/data）優先、なければアプリディレクトリ
+    DATA_DIR = os.environ.get("DATA_DIR", os.path.abspath(shift_sync_dir))
+    FLAG_FILE       = os.path.join(DATA_DIR, "first_run_done.flag")
     FIRST_RUN_START = date(2026, 1, 1)
 
     from scraper import ShifuconScraper
