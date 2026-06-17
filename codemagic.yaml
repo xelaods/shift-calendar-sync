@@ -97,11 +97,14 @@ workflows:
           </plist>
           PLIST
           
+                    # ワークスペースとスキームの一覧を表示してデバッグ
+          xcodebuild -list -workspace ShiftSync.xcworkspace
+          
           # アーカイブ作成
-          xcodebuild             -workspace ShiftSync.xcworkspace             -scheme ShiftSync             -configuration Release             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -destination "generic/platform=iOS"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}"             archive | xcpretty
+          xcodebuild             -workspace ShiftSync.xcworkspace             -scheme ShiftSync             -configuration Release             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -destination "generic/platform=iOS"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}"             archive
           
           # IPA エクスポート
-          xcodebuild             -exportArchive             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -exportOptionsPlist /tmp/ExportOptions.plist             -exportPath "$CM_BUILD_DIR/ipa" | xcpretty
+          xcodebuild             -exportArchive             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -exportOptionsPlist /tmp/ExportOptions.plist             -exportPath "$CM_BUILD_DIR/ipa"
 
     # ── 成果物 ─────────────────────────────────────────────────────────
     artifacts:
