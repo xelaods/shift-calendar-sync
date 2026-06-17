@@ -64,6 +64,7 @@ workflows:
           # プロファイル情報の抽出
           PROFILE_PATH="$HOME/Library/MobileDevice/Provisioning Profiles/adhoc.mobileprovision"
           PROFILE_UUID=$(grep -a -A 1 'UUID' "$PROFILE_PATH" | grep string | sed -e 's/<[^>]*>//g' | xargs)
+          TEAM_ID=$(grep -a -A 2 'application-identifier' "$PROFILE_PATH" | grep string | sed -e 's/<[^>]*>//g' | xargs | cut -d'.' -f1)
           BUNDLE_ID=$(grep -a -A 2 'application-identifier' "$PROFILE_PATH" | grep string | sed -e 's/<[^>]*>//g' | xargs | cut -d'.' -f2-)
           
           if grep -a -A 1 'get-task-allow' "$PROFILE_PATH" | grep -q 'true'; then
@@ -73,6 +74,7 @@ workflows:
           fi
           
           echo "Profile UUID: $PROFILE_UUID"
+          echo "Team ID: $TEAM_ID"
           echo "Bundle ID: $BUNDLE_ID"
           echo "Export Method: $METHOD"
           
@@ -101,7 +103,7 @@ workflows:
           xcodebuild -list -workspace ShiftSync.xcworkspace
           
           # アーカイブ作成
-          xcodebuild             -workspace ShiftSync.xcworkspace             -scheme ShiftSync             -configuration Release             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -destination "generic/platform=iOS"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}"             archive
+          xcodebuild             -workspace ShiftSync.xcworkspace             -scheme ShiftSync             -configuration Release             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -destination "generic/platform=iOS"             CODE_SIGN_STYLE=Manual             DEVELOPMENT_TEAM="${TEAM_ID}"             PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}"             archive
           
           # IPA エクスポート
           xcodebuild             -exportArchive             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -exportOptionsPlist /tmp/ExportOptions.plist             -exportPath "$CM_BUILD_DIR/ipa"
