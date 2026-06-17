@@ -56,24 +56,37 @@ workflows:
           echo "${CM_PROVISIONING_PROFILE}" | base64 --decode \
             > "$PROFILES_HOME/adhoc.mobileprovision"
 
-      # 7. ExportOptions.plist を生成（ad-hoc 用）
-      - name: Create ExportOptions.plist
+            # 7. ビルドと IPA エクスポート
+      - name: Build and Export IPA
         script: |
-          PROFILE_UUID=$(grep -a -A 1 'UUID' \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/adhoc.mobileprovision" \
-            | grep string | sed -e 's/<[^>]*>//g' | xargs)
-          echo "Using profile UUID: $PROFILE_UUID"
-
+          cd ShiftSyncApp/ios
+          
+          # プロファイル情報の抽出
+          PROFILE_PATH="$HOME/Library/MobileDevice/Provisioning Profiles/adhoc.mobileprovision"
+          PROFILE_UUID=$(grep -a -A 1 'UUID' "$PROFILE_PATH" | grep string | sed -e 's/<[^>]*>//g' | xargs)
+          BUNDLE_ID=$(grep -a -A 2 'application-identifier' "$PROFILE_PATH" | grep string | sed -e 's/<[^>]*>//g' | xargs | cut -d'.' -f2-)
+          
+          if grep -a -A 1 'get-task-allow' "$PROFILE_PATH" | grep -q 'true'; then
+            METHOD="development"
+          else
+            METHOD="ad-hoc"
+          fi
+          
+          echo "Profile UUID: $PROFILE_UUID"
+          echo "Bundle ID: $BUNDLE_ID"
+          echo "Export Method: $METHOD"
+          
+          # ExportOptions.plist の生成
           cat > /tmp/ExportOptions.plist <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>ad-hoc</string>
+            <string>${METHOD}</string>
             <key>provisioningProfiles</key>
             <dict>
-              <key>com.shiftsync.app</key>
+              <key>${BUNDLE_ID}</key>
               <string>${PROFILE_UUID}</string>
             </dict>
             <key>compileBitcode</key>
@@ -83,29 +96,12 @@ workflows:
           </dict>
           </plist>
           PLIST
-
-      # 8. アーカイブ（.xcarchive）を作成
-      - name: Build archive
-        script: |
-          cd ShiftSyncApp/ios
-          xcodebuild \
-            -workspace ShiftSync.xcworkspace \
-            -scheme ShiftSync \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive" \
-            -destination "generic/platform=iOS" \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="adhoc.mobileprovision" \
-            archive | xcpretty
-
-      # 9. .ipa を書き出し
-      - name: Export IPA
-        script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive" \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -exportPath "$CM_BUILD_DIR/ipa" | xcpretty
+          
+          # アーカイブ作成
+          xcodebuild             -workspace ShiftSync.xcworkspace             -scheme ShiftSync             -configuration Release             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -destination "generic/platform=iOS"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}"             archive | xcpretty
+          
+          # IPA エクスポート
+          xcodebuild             -exportArchive             -archivePath "$CM_BUILD_DIR/ShiftSync.xcarchive"             -exportOptionsPlist /tmp/ExportOptions.plist             -exportPath "$CM_BUILD_DIR/ipa" | xcpretty
 
     # ── 成果物 ─────────────────────────────────────────────────────────
     artifacts:
