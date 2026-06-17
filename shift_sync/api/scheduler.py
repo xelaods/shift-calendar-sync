@@ -84,12 +84,12 @@ def job_notify_shifts():
 
 def job_auto_sync():
     """
-    自動同期ジョブ: 当月・翌月のシフトをスクレイプしてDBに保存。
+    自動同期ジョブ: 当月・翌月のシフトをスクレイプしてDBに upsert する。
     毎週月曜 6:00 に実行。
     """
     db = SessionLocal()
     try:
-        import sys
+        import sys, calendar
         shift_sync_dir = os.path.join(os.path.dirname(__file__), "..")
         sys.path.insert(0, os.path.abspath(shift_sync_dir))
 
@@ -97,30 +97,39 @@ def job_auto_sync():
         from .models import Shift
 
         today = date.today()
-        months_to_sync = [
-            (today.year, today.month),
-        ]
-        # 翌月も追加
+
+        # 翌月末を終了日に設定
         if today.month == 12:
-            months_to_sync.append((today.year + 1, 1))
+            next_y, next_m = today.year + 1, 1
         else:
-            months_to_sync.append((today.year, today.month + 1))
+            next_y, next_m = today.year, today.month + 1
+        last_day = calendar.monthrange(next_y, next_m)[1]
+        date_to = date(next_y, next_m, last_day)
+
+        months_to_sync = [(today.year, today.month), (next_y, next_m)]
 
         scraper = ShifuconScraper(headless=True)
-        all_shifts = scraper.get_shifts_for_months(months_to_sync)
+        all_shifts = scraper.get_shifts_for_months(
+            months_to_sync, date_from=today, date_to=date_to
+        )
 
         added = 0
         for entry in all_shifts:
             existing = (
                 db.query(Shift)
-                .filter(
-                    Shift.date == entry.date,
-                    Shift.start_time == entry.start_time,
-                    Shift.end_time == entry.end_time,
-                )
+                .filter(Shift.date == entry.date)
                 .first()
             )
-            if not existing:
+            if existing:
+                # 時刻・店舗が変わっていれば更新
+                if (existing.start_time != entry.start_time
+                        or existing.end_time != entry.end_time
+                        or existing.store_name != entry.store_name):
+                    existing.start_time = entry.start_time
+                    existing.end_time = entry.end_time
+                    existing.store_name = entry.store_name
+                    existing.note = entry.note
+            else:
                 shift = Shift(
                     date=entry.date,
                     start_time=entry.start_time,

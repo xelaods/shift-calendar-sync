@@ -94,6 +94,14 @@ export async function triggerSync(body: SyncRequest): Promise<SyncResponse> {
   });
 }
 
+/** 年初（1/1）〜翌月末まで全件強制再取得・upsert */
+export async function fullResetSync(): Promise<SyncResponse> {
+  return request<SyncResponse>('/shifts/sync/full-reset', {
+    method: 'POST',
+  });
+}
+
+
 // ────────────────────────────────
 // 統計
 // ────────────────────────────────

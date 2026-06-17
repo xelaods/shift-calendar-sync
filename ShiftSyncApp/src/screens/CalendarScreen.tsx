@@ -3,8 +3,12 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator
 import { BlurView } from 'expo-blur';
 import { Calendar, DateData } from 'react-native-calendars';
 import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius } from '../theme/liquidGlass';
-import { fetchShifts, ShiftResponse } from '../api/client';
+import { fetchShifts, fetchMonthlyStats, ShiftResponse } from '../api/client';
+
+const CACHE_KEY_PREFIX = 'shifts_cache_';
+const STATS_CACHE_KEY_PREFIX = 'stats_cache_';
 
 function buildMarkedDates(shifts: ShiftResponse[], selected: string | null) {
   const marks: Record<string, object> = {};
@@ -39,21 +43,67 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [cacheTime, setCacheTime] = useState<string | null>(null);
+  const [hourlyWage, setHourlyWage] = useState(1050);
+
+  // キャッシュからシフトを読み込む
+  const loadFromCache = useCallback(async (y: number, m: number): Promise<ShiftResponse[] | null> => {
+    try {
+      const cached = await AsyncStorage.getItem(`${CACHE_KEY_PREFIX}${y}_${m}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        setCacheTime(timestamp);
+        return data;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }, []);
+
+  // キャッシュにシフトを保存
+  const saveToCache = useCallback(async (y: number, m: number, data: ShiftResponse[]) => {
+    try {
+      const timestamp = new Date().toLocaleString('ja-JP');
+      await AsyncStorage.setItem(
+        `${CACHE_KEY_PREFIX}${y}_${m}`,
+        JSON.stringify({ data, timestamp })
+      );
+      setCacheTime(timestamp);
+    } catch { /* ignore */ }
+  }, []);
 
   const loadShifts = useCallback(async (y: number, m: number) => {
     setLoading(true);
     setError(null);
+    setIsOffline(false);
+
     try {
+      // API からシフト取得
       const data = await fetchShifts(y, m);
       setShifts(data);
+      await saveToCache(y, m, data);
+
+      // 時給設定も取得
+      try {
+        const stats = await fetchMonthlyStats(y, m);
+        setHourlyWage(stats.hourly_wage);
+      } catch { /* 時給はデフォルトのまま */ }
+
     } catch (e: any) {
-      setError(e.message || 'データ取得に失敗しました');
+      // オフライン時はキャッシュから表示
+      const cached = await loadFromCache(y, m);
+      if (cached) {
+        setShifts(cached);
+        setIsOffline(true);
+      } else {
+        setShifts([]);
+        setError(e.message || 'データ取得に失敗しました');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadFromCache, saveToCache]);
 
-  // 画面フォーカス時にリロード
   useFocusEffect(useCallback(() => {
     loadShifts(year, month);
   }, [year, month]));
@@ -73,7 +123,6 @@ export default function CalendarScreen() {
 
   const selectedShift = selectedDate ? shifts.find(s => s.date === selectedDate) : null;
   const markedDates = buildMarkedDates(shifts, selectedDate);
-
   const totalHours = shifts.reduce((sum, s) => sum + calcHours(s.start_time, s.end_time), 0);
 
   return (
@@ -91,6 +140,16 @@ export default function CalendarScreen() {
           <Text style={styles.headerTitle}>シフトカレンダー</Text>
           <Text style={styles.headerSub}>{year}年{month}月</Text>
         </View>
+
+        {/* オフライン表示 */}
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineText}>
+              📴 オフライン — キャッシュを表示中
+              {cacheTime ? `\n最終更新: ${cacheTime}` : ''}
+            </Text>
+          </View>
+        )}
 
         {loading && (
           <View style={styles.loadingRow}>
@@ -201,7 +260,7 @@ export default function CalendarScreen() {
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>
-                    {error ? '—' : `¥${Math.round(totalHours * 1050).toLocaleString()}`}
+                    {error && !isOffline ? '—' : `¥${Math.round(totalHours * hourlyWage).toLocaleString()}`}
                   </Text>
                   <Text style={styles.summaryLabel}>概算収入</Text>
                 </View>
@@ -224,6 +283,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.lg, paddingTop: 60, paddingBottom: Spacing.md },
   headerTitle: { ...Typography.largeTitle, marginBottom: 4 },
   headerSub: { ...Typography.callout, color: Colors.labelSecondary },
+  offlineBanner: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.orangeLight, borderRadius: Radius.md, padding: Spacing.md },
+  offlineText: { ...Typography.footnote, color: Colors.orange, lineHeight: 18 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm, gap: 8 },
   loadingText: { ...Typography.caption, color: Colors.labelSecondary },
   errorBanner: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.coralLight, borderRadius: Radius.md, padding: Spacing.md },

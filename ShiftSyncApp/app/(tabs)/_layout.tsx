@@ -1,29 +1,82 @@
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, Animated, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRef, useEffect } from 'react';
 import { Colors, Radius } from '../../src/theme/liquidGlass';
 
-const TABS = [
-  { name: 'index',    icon: '📅', label: 'シフト' },
-  { name: 'sync',     icon: '↻',  label: '同期'   },
-  { name: 'stats',    icon: '¥',  label: '給与'   },
-  { name: 'settings', icon: '⚙️', label: '設定'   },
+type TabName = 'index' | 'sync' | 'stats' | 'settings';
+
+const TABS: { name: TabName; icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { name: 'index',    icon: 'calendar-outline',   iconActive: 'calendar',        label: 'シフト' },
+  { name: 'sync',     icon: 'sync-outline',        iconActive: 'sync',            label: '同期'   },
+  { name: 'stats',    icon: 'bar-chart-outline',   iconActive: 'bar-chart',       label: '給与'   },
+  { name: 'settings', icon: 'settings-outline',    iconActive: 'settings',        label: '設定'   },
 ];
 
-function TabIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
+function AnimatedTabIcon({
+  icon, iconActive, label, focused,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconActive: keyof typeof Ionicons.glyphMap;
+  label: string;
+  focused: boolean;
+}) {
+  const scaleAnim  = useRef(new Animated.Value(1)).current;
+  const opacAnim   = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (focused) {
+      // アイコンがアクティブになるときバウンス
+      Animated.sequence([
+        Animated.spring(scaleAnim, { toValue: 1.18, useNativeDriver: true, damping: 6, stiffness: 400 }),
+        Animated.spring(scaleAnim, { toValue: 1.0,  useNativeDriver: true, damping: 14, stiffness: 200 }),
+      ]).start();
+      Animated.timing(opacAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    } else {
+      Animated.timing(opacAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      Animated.spring(scaleAnim, { toValue: 1.0, useNativeDriver: true, damping: 14, stiffness: 200 }).start();
+    }
+  }, [focused]);
+
   return (
-    <View style={styles.tabItem}>
-      {/* アクティブ時のピル背景 */}
-      {focused && (
-        <View style={styles.activePill}>
-          <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFillObject} />
-          <View style={styles.activePillHighlight} />
-        </View>
-      )}
-      <Text style={[styles.tabIcon, focused && styles.tabIconFocused]}>{icon}</Text>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>{label}</Text>
-      {/* アクティブドット */}
-      {focused && <View style={styles.activeDot} />}
+    <View style={tabStyles.item}>
+      {/* アクティブ時のグラスピル */}
+      <Animated.View style={[tabStyles.pill, { opacity: opacAnim }]}>
+        <BlurView intensity={72} tint="light" style={StyleSheet.absoluteFillObject} />
+        {/* ピル内グラデーションハイライト */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.85)', 'rgba(255,255,255,0.0)']}
+          style={tabStyles.pillHighlight}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        {/* 青いグラデーションオーバーレイ */}
+        <LinearGradient
+          colors={['rgba(0,122,255,0.10)', 'rgba(88,86,214,0.06)']}
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      </Animated.View>
+
+      {/* アイコン */}
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Ionicons
+          name={focused ? iconActive : icon}
+          size={22}
+          color={focused ? Colors.blue : Colors.labelTertiary}
+        />
+      </Animated.View>
+
+      {/* ラベル */}
+      <Text style={[tabStyles.label, focused && tabStyles.labelFocused]}>
+        {label}
+      </Text>
+
+      {/* アクティブインジケータドット */}
+      <Animated.View style={[tabStyles.dot, { opacity: opacAnim }]} />
     </View>
   );
 }
@@ -33,16 +86,33 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: tabStyles.bar,
         tabBarBackground: () => (
           <View style={StyleSheet.absoluteFillObject}>
+            {/* ベースブラー */}
             <BlurView
-              intensity={85}
+              intensity={90}
               tint="light"
               style={[StyleSheet.absoluteFillObject, { borderRadius: Radius.xxl }]}
             />
-            {/* トップハイライトライン */}
-            <View style={styles.tabBarHighlight} />
+            {/* プリズマティックグラデーション（青→紫→透明） */}
+            <LinearGradient
+              colors={[
+                'rgba(0,122,255,0.08)',
+                'rgba(88,86,214,0.06)',
+                'rgba(255,255,255,0.0)',
+              ]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: Radius.xxl }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            {/* トップハイライトライン（光沢感） */}
+            <LinearGradient
+              colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.0)']}
+              style={tabStyles.topHighlight}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 0 }}
+            />
           </View>
         ),
         tabBarShowLabel: false,
@@ -54,7 +124,12 @@ export default function TabsLayout() {
           name={tab.name}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={tab.icon} label={tab.label} focused={focused} />
+              <AnimatedTabIcon
+                icon={tab.icon}
+                iconActive={tab.iconActive}
+                label={tab.label}
+                focused={focused}
+              />
             ),
           }}
         />
@@ -63,81 +138,73 @@ export default function TabsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
+const tabStyles = StyleSheet.create({
+  bar: {
     position: 'absolute',
     bottom: 24,
     left: 16,
     right: 16,
-    height: 76,
+    height: 80,
     borderRadius: Radius.xxl,
     borderWidth: 1,
-    borderColor: Colors.glassBorder,
+    borderColor: 'rgba(255,255,255,0.6)',
     backgroundColor: 'transparent',
     elevation: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 32,
+    // 多層シャドウで立体感
+    shadowColor: '#1A1A2E',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
+    shadowRadius: 40,
     overflow: Platform.OS === 'ios' ? 'visible' : 'hidden',
   },
-  tabBarHighlight: {
+  topHighlight: {
     position: 'absolute',
     top: 0,
-    left: 20,
-    right: 20,
+    left: 16,
+    right: 16,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 1,
   },
-  tabItem: {
+  item: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 56,
+    width: 68,
+    height: 60,
     position: 'relative',
   },
-  activePill: {
+  pill: {
     position: 'absolute',
-    top: 4,
-    left: -4,
-    right: -4,
-    bottom: 8,
-    borderRadius: 16,
+    top: 2,
+    left: -6,
+    right: -6,
+    bottom: 6,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,122,255,0.2)',
+    borderColor: 'rgba(0,122,255,0.18)',
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,122,255,0.08)',
   },
-  activePillHighlight: {
+  pillHighlight: {
     position: 'absolute',
     top: 0,
-    left: 8,
-    right: 8,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    left: 0,
+    right: 0,
+    height: 12,
+    zIndex: 1,
   },
-  tabIcon: {
-    fontSize: 20,
-    marginBottom: 2,
-    opacity: 0.4,
-  },
-  tabIconFocused: {
-    opacity: 1,
-  },
-  tabLabel: {
+  label: {
     fontSize: 10,
-    color: Colors.labelTertiary,
     fontWeight: '500',
+    color: Colors.labelTertiary,
+    marginTop: 3,
     letterSpacing: 0.2,
   },
-  tabLabelFocused: {
+  labelFocused: {
     color: Colors.blue,
     fontWeight: '700',
   },
-  activeDot: {
+  dot: {
     position: 'absolute',
-    bottom: -2,
+    bottom: 0,
     width: 4,
     height: 4,
     borderRadius: 2,

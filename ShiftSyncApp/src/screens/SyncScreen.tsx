@@ -3,18 +3,21 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView
 import { BlurView } from 'expo-blur';
 import * as SecureStore from 'expo-secure-store';
 import { Colors, Typography, Spacing, Radius } from '../theme/liquidGlass';
-import { triggerSync, checkHealth, SyncResponse } from '../api/client';
+import { triggerSync, fullResetSync, checkHealth, SyncResponse } from '../api/client';
 
 type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
 export default function SyncScreen() {
   const [fetchStatus, setFetchStatus] = useState<SyncStatus>('idle');
   const [gcalStatus, setGcalStatus] = useState<SyncStatus>('idle');
+  const [resetStatus, setResetStatus] = useState<SyncStatus>('idle');
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [fetchLog, setFetchLog] = useState<string[]>([]);
   const [gcalLog, setGcalLog] = useState<string[]>([]);
+  const [resetLog, setResetLog] = useState<string[]>([]);
   const [fetchResult, setFetchResult] = useState<SyncResponse | null>(null);
   const [gcalResult, setGcalResult] = useState<SyncResponse | null>(null);
+  const [resetResult, setResetResult] = useState<SyncResponse | null>(null);
   const [serverOk, setServerOk] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -22,8 +25,9 @@ export default function SyncScreen() {
     SecureStore.getItemAsync('last_sync').then(v => setLastSync(v));
   }, []);
 
-  const addFetchLog = (line: string) => setFetchLog(prev => [...prev, line]);
-  const addGcalLog  = (line: string) => setGcalLog(prev  => [...prev, line]);
+  const addFetchLog  = (line: string) => setFetchLog(prev  => [...prev, line]);
+  const addGcalLog   = (line: string) => setGcalLog(prev   => [...prev, line]);
+  const addResetLog  = (line: string) => setResetLog(prev  => [...prev, line]);
 
   // ─── シフト取得（DB保存のみ）───
   const handleFetchShifts = async () => {
@@ -105,7 +109,57 @@ export default function SyncScreen() {
     }
   };
 
-  const isBusy = fetchStatus === 'syncing' || gcalStatus === 'syncing';
+  // ─── 年初からの全件再取得 ───
+  const handleFullReset = () => {
+    if (serverOk === false) {
+      Alert.alert('サーバー未起動', 'バックエンドAPIサーバーに接続できません。');
+      return;
+    }
+    Alert.alert(
+      '年初から全件再取得',
+      `今年1月1日から翌月末までのシフトを全件取得し直します。\n既存データは最新情報で上書きされます。\n\n続けますか？`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '実行する',
+          style: 'destructive',
+          onPress: async () => {
+            setResetStatus('syncing');
+            setResetLog([]);
+            setResetResult(null);
+            try {
+              addResetLog('📡 バックエンドに接続中...');
+              await new Promise(r => setTimeout(r, 300));
+              addResetLog('🔐 シフコンにログイン中...');
+              await new Promise(r => setTimeout(r, 300));
+              const now = new Date();
+              addResetLog(`📋 ${now.getFullYear()}年1月〜翌月末のシフトを全件取得中...`);
+              addResetLog('⏳ 全期間のスクレイピングのため数分かかります...');
+
+              const res = await fullResetSync();
+
+              addResetLog(`✅ 全件取得完了: ${res.scraped}件`);
+              if (res.added_to_db > 0) addResetLog(`💾 DB新規追加: ${res.added_to_db}件`);
+              addResetLog(`🔄 upsert完了（変更分も上書き済み）`);
+
+              setResetResult(res);
+              setResetStatus('success');
+
+              const syncTime = new Date().toLocaleString('ja-JP');
+              setLastSync(syncTime);
+              await SecureStore.setItemAsync('last_sync', syncTime);
+            } catch (e: any) {
+              addResetLog(`❌ エラー: ${e.message}`);
+              setResetStatus('error');
+              Alert.alert('再取得エラー', e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const isBusy = fetchStatus === 'syncing' || gcalStatus === 'syncing' || resetStatus === 'syncing';
 
   return (
     <View style={styles.container}>
@@ -248,6 +302,58 @@ export default function SyncScreen() {
           </View>
         </View>
 
+        {/* ─── ボタン3: 年初から全件再取得 ─── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>年初から全件再取得</Text>
+          <View style={styles.card}>
+            <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFillObject} />
+            <View style={styles.hl} />
+            <View style={styles.cardContent}>
+              <Text style={styles.cardDesc}>
+                今年1月1日から翌月末までの全シフトを再取得します。シフト変更・追加・削除に完全対応します。
+              </Text>
+
+              {resetStatus !== 'idle' && (
+                <View style={[styles.statusBadge, {
+                  backgroundColor:
+                    resetStatus === 'syncing' ? Colors.glassSubtle :
+                    resetStatus === 'success' ? Colors.greenLight : Colors.coralLight
+                }]}>
+                  <Text style={[styles.statusBadgeText, {
+                    color:
+                      resetStatus === 'syncing' ? Colors.labelSecondary :
+                      resetStatus === 'success' ? Colors.green : Colors.coral
+                  }]}>
+                    {resetStatus === 'syncing' ? '⏳ 取得中（数分かかります）...' :
+                     resetStatus === 'success' ? `✅ 完了 ${resetResult?.scraped ?? 0}件取得` :
+                     '❌ エラー'}
+                  </Text>
+                </View>
+              )}
+
+              {resetLog.length > 0 && (
+                <View style={styles.logBox}>
+                  {resetLog.map((line, i) => (
+                    <Text key={i} style={styles.logLine}>{line}</Text>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.btn, styles.btnOrange, isBusy && styles.btnDisabled]}
+                onPress={handleFullReset}
+                disabled={isBusy}
+                activeOpacity={0.85}
+              >
+                {resetStatus === 'syncing'
+                  ? <ActivityIndicator color={Colors.white} />
+                  : <Text style={styles.btnText}>🔄 年初から全件再取得</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         {/* Info */}
         <View style={styles.infoCard}>
           <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFillObject} />
@@ -255,7 +361,8 @@ export default function SyncScreen() {
           <View style={styles.infoContent}>
             <Text style={styles.infoTitle}>ℹ️ 同期について</Text>
             <Text style={styles.infoText}>
-              初回は全期間分、2回目以降は今日から5日先のシフトのみを取得します。{'\n'}
+              通常同期は今日〜翌月末のシフトを取得します。{'\n'}
+              年初から全件再取得はシフト変更があった場合に使用してください。{'\n'}
               Googleカレンダー同期には別途サービスアカウントの設定が必要です。
             </Text>
           </View>
@@ -291,6 +398,7 @@ const styles = StyleSheet.create({
   btn: { borderRadius: Radius.xl, overflow: 'hidden', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   btnBlue: { backgroundColor: Colors.blue, paddingVertical: 16, alignItems: 'center', shadowColor: Colors.blue },
   btnGreen: { backgroundColor: Colors.green, paddingVertical: 16, alignItems: 'center', shadowColor: Colors.green },
+  btnOrange: { backgroundColor: Colors.orange, paddingVertical: 16, alignItems: 'center', shadowColor: Colors.orange },
   btnDisabled: { opacity: 0.5 },
   btnText: { ...Typography.headline, color: Colors.white },
   infoCard: { borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.glassBorder, overflow: 'hidden' },

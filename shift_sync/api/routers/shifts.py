@@ -3,7 +3,7 @@
 """
 import sys
 import os
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
@@ -162,7 +162,6 @@ def sync_shifts_blocking(
 ):
     """
     同期を同期的（ブロッキング）に実行する。
-    小さい月や初回テスト用。タイムアウトに注意。
     """
     from datetime import datetime
     now = datetime.now()
@@ -171,9 +170,56 @@ def sync_shifts_blocking(
     return _run_sync(year, month, body.sync_to_gcal, db, force_first_run=body.force_first_run)
 
 
+@router.post("/sync/full-reset", response_model=SyncResponse)
+def sync_full_reset(
+    db: Session = Depends(get_db),
+):
+    """
+    年初（1月1日）から翌月末まで全期間を強制的に再取得・upsertする。
+    既存データを上書きするため、シフト変更にも対応できる。
+    """
+    return _run_sync_full_reset(db)
+
+
+def _upsert_shift(db: Session, entry, source: str = "auto") -> bool:
+    """
+    シフトを upsert する（同日のシフトが存在すれば時刻・店舗を更新、なければ追加）。
+    True = 新規追加 / False = 更新（既存）
+    """
+    existing = (
+        db.query(Shift)
+        .filter(Shift.date == entry.date)
+        .first()
+    )
+    if existing:
+        # 時刻や店舗が変わっていれば更新
+        changed = (
+            existing.start_time != entry.start_time
+            or existing.end_time != entry.end_time
+            or existing.store_name != entry.store_name
+        )
+        if changed:
+            existing.start_time = entry.start_time
+            existing.end_time = entry.end_time
+            existing.store_name = entry.store_name
+            existing.note = entry.note
+        return False  # 既存（更新）
+    else:
+        shift = Shift(
+            date=entry.date,
+            start_time=entry.start_time,
+            end_time=entry.end_time,
+            store_name=entry.store_name,
+            note=entry.note,
+            source=source,
+        )
+        db.add(shift)
+        return True  # 新規追加
+
+
 def _run_sync(year: int, month: int, sync_to_gcal: bool, db: Session,
               force_first_run: bool = False) -> SyncResponse:
-    """実際のスクレイプ・同期処理（初回/通常モード自動切替）"""
+    """実際のスクレイプ・同期処理"""
     import sys, os
     from datetime import date, timedelta, datetime as _dt
 
@@ -182,19 +228,26 @@ def _run_sync(year: int, month: int, sync_to_gcal: bool, db: Session,
 
     FLAG_FILE       = os.path.abspath(os.path.join(shift_sync_dir, "first_run_done.flag"))
     FIRST_RUN_START = date(2026, 1, 1)
-    NORMAL_RUN_DAYS = 5
 
     from scraper import ShifuconScraper
 
-    # force_first_run=True の場合はフラグを無視して初回モードで実行
     is_first_run = force_first_run or not os.path.exists(FLAG_FILE)
     today        = date.today()
-    date_to      = today + timedelta(days=NORMAL_RUN_DAYS)
+
+    # 翌月末を終了日として設定
+    if today.month == 12:
+        next_month_end = date(today.year + 1, 1, 31)
+    else:
+        import calendar
+        last_day = calendar.monthrange(today.year, today.month + 1)[1]
+        next_month_end = date(today.year, today.month + 1, last_day)
+
+    date_to = next_month_end
 
     scraper = ShifuconScraper(headless=True)
 
     if is_first_run:
-        # ─── 初回: 2026/1/1 〜 今日+5日 ───
+        # 初回: 年初〜翌月末
         date_from = FIRST_RUN_START
         print(f"[API] 初回モード: {date_from} 〜 {date_to}")
 
@@ -217,45 +270,37 @@ def _run_sync(year: int, month: int, sync_to_gcal: bool, db: Session,
                                                            date_from=date_from,
                                                            date_to=date_to)
     else:
-        # ─── 2回目以降: 今日 〜 今日+5日 ───
+        # 通常: 今日〜翌月末（シフト変更も検出するため翌月まで取得）
         date_from = today
         print(f"[API] 通常モード: {date_from} 〜 {date_to}")
-        scraped_shifts = scraper.get_shifts(year=year, month=month,
-                                            date_from=date_from, date_to=date_to)
 
-    # ─── DB 保存 ───
+        # 当月・翌月を取得
+        months_to_sync = [(today.year, today.month)]
+        if today.month == 12:
+            months_to_sync.append((today.year + 1, 1))
+        else:
+            months_to_sync.append((today.year, today.month + 1))
+
+        scraped_shifts = scraper.get_shifts_for_months(
+            months_to_sync, date_from=date_from, date_to=date_to
+        )
+
+    # DB upsert
     added_to_db = 0
     for entry in scraped_shifts:
-        existing = (
-            db.query(Shift)
-            .filter(
-                Shift.date == entry.date,
-                Shift.start_time == entry.start_time,
-                Shift.end_time == entry.end_time,
-            )
-            .first()
-        )
-        if not existing:
-            shift = Shift(
-                date=entry.date,
-                start_time=entry.start_time,
-                end_time=entry.end_time,
-                store_name=entry.store_name,
-                note=entry.note,
-                source="auto",
-            )
-            db.add(shift)
+        is_new = _upsert_shift(db, entry, source="auto")
+        if is_new:
             added_to_db += 1
 
     db.commit()
 
-    # ─── 初回フラグを作成 ───
+    # 初回フラグを作成
     if is_first_run:
         with open(FLAG_FILE, "w") as f:
             f.write(_dt.now().isoformat())
         print(f"[API] 初回フラグを保存しました: {FLAG_FILE}")
 
-    # ─── GCal 同期 ───
+    # GCal 同期
     gcal_added = gcal_skipped = gcal_errors = 0
     if sync_to_gcal and scraped_shifts:
         try:
@@ -280,6 +325,59 @@ def _run_sync(year: int, month: int, sync_to_gcal: bool, db: Session,
     )
 
 
+def _run_sync_full_reset(db: Session) -> SyncResponse:
+    """年初から翌月末まで全期間を強制 upsert する"""
+    import sys, os, calendar
+    from datetime import date, datetime as _dt
+
+    shift_sync_dir = os.path.join(os.path.dirname(__file__), "..", "..")
+    sys.path.insert(0, os.path.abspath(shift_sync_dir))
+
+    from scraper import ShifuconScraper
+
+    today      = date.today()
+    date_from  = date(today.year, 1, 1)  # 年初
+
+    if today.month == 12:
+        last_day = 31
+        next_y, next_m = today.year + 1, 1
+    else:
+        next_y, next_m = today.year, today.month + 1
+        last_day = calendar.monthrange(next_y, next_m)[1]
+    date_to = date(next_y, next_m, last_day)
+
+    print(f"[API] 全件再取得モード: {date_from} 〜 {date_to}")
+
+    # 対象月リスト生成
+    months, y, m = [], date_from.year, date_from.month
+    while (y, m) <= (date_to.year, date_to.month):
+        months.append((y, m))
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+
+    scraper = ShifuconScraper(headless=True)
+    scraped_shifts = scraper.get_shifts_for_months(
+        months, date_from=date_from, date_to=date_to
+    )
+
+    added_to_db = 0
+    for entry in scraped_shifts:
+        is_new = _upsert_shift(db, entry, source="auto")
+        if is_new:
+            added_to_db += 1
+
+    db.commit()
+
+    return SyncResponse(
+        scraped=len(scraped_shifts),
+        added_to_db=added_to_db,
+        gcal_added=0,
+        gcal_skipped=0,
+        gcal_errors=0,
+        message=f"[全件再取得] {len(scraped_shifts)}件取得, DB+{added_to_db}件（upsert完了）",
+    )
+
 
 @router.delete("/gcal/all", status_code=200)
 def delete_all_gcal_events():
@@ -301,4 +399,3 @@ def delete_all_gcal_events():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"カレンダー削除エラー: {str(e)}")
-
