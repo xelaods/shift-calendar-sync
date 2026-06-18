@@ -8,16 +8,21 @@ import * as SecureStore from 'expo-secure-store';
 // Render にデプロイされた本番URL（設定画面から変更可能）
 const DEFAULT_API_URL = 'https://shiftsync-api-0ett.onrender.com';
 
+/** URLの末尾スラッシュを除去する（//health になるのを防ぐ） */
+function trimUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 /**
  * 保存済みURLを取得する。
- * ローカルIP（http://192.168.x.x など）が残っていた場合は
- * 自動で Render URL に修正して保存し直す。
+ * - 末尾スラッシュを自動除去
+ * - ローカルIP / 旧URLが残っていた場合は Render URL に自動修正
  */
 export async function getApiUrl(): Promise<string> {
   const saved = await SecureStore.getItemAsync('api_url');
   if (!saved) return DEFAULT_API_URL;
 
-  // ローカルIPまたは localhost が保存されていたら自動修正
+  // ローカルIPまたは旧URLが保存されていたら自動修正
   const isLocalUrl =
     saved.startsWith('http://192.168.') ||
     saved.startsWith('http://10.') ||
@@ -27,12 +32,12 @@ export async function getApiUrl(): Promise<string> {
     saved === 'https://shiftsync-api.onrender.com'; // 旧URL
 
   if (isLocalUrl) {
-    console.log('[API] ローカルURLを検出。Render URLに自動修正します:', saved, '->', DEFAULT_API_URL);
     await SecureStore.setItemAsync('api_url', DEFAULT_API_URL);
     return DEFAULT_API_URL;
   }
 
-  return saved;
+  // 末尾スラッシュを除去して返す
+  return trimUrl(saved);
 }
 
 
@@ -44,7 +49,7 @@ async function request<T>(
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
-  const baseUrl = await getApiUrl();
+  const baseUrl = trimUrl(await getApiUrl());
   const url = `${baseUrl}${path}`;
 
   // AbortController でタイムアウト制御
