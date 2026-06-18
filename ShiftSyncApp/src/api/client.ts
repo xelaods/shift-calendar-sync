@@ -13,21 +13,35 @@ export async function getApiUrl(): Promise<string> {
   return saved || DEFAULT_API_URL;
 }
 
+// デフォルトタイムアウト（通常リクエスト: 90秒、ヘルスチェック: 10秒）
+const DEFAULT_TIMEOUT_MS = 90_000;
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
   const baseUrl = await getApiUrl();
   const url = `${baseUrl}${path}`;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+
+  // AbortController でタイムアウト制御
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      signal: controller.signal,
+      ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timerId);
   }
-  return res.json();
 }
 
 // ────────────────────────────────
@@ -145,13 +159,35 @@ export async function updateSettings(body: Partial<SettingsResponse>): Promise<S
 // ────────────────────────────────
 // ヘルスチェック
 // ────────────────────────────────
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const res = await request<{ status: string }>('/health');
-    return res.status === 'healthy';
-  } catch {
-    return false;
+/**
+ * サーバーのヘルスチェック。
+ * Render 無料プランはスリープから起動に最大60秒かかるため、
+ * タイムアウトまでリトライし続ける。
+ * @param totalWaitMs 合計待機時間（デフォルト: 65秒）
+ * @param onWaiting   「起動中」コールバック（UIに進捗を伝える用）
+ */
+export async function checkHealth(
+  totalWaitMs = 65_000,
+  onWaiting?: (elapsedMs: number) => void
+): Promise<boolean> {
+  const started = Date.now();
+  const PROBE_TIMEOUT = 10_000; // 1回あたりのタイムアウト
+  const RETRY_INTERVAL = 4_000; // リトライ間隔
+
+  while (Date.now() - started < totalWaitMs) {
+    try {
+      const res = await request<{ status: string }>('/health', {}, PROBE_TIMEOUT);
+      if (res.status === 'healthy') return true;
+    } catch {
+      // スリープ中・起動中は接続エラーになるので継続
+    }
+    const elapsed = Date.now() - started;
+    if (onWaiting) onWaiting(elapsed);
+    // 残り時間がなければ終了
+    if (elapsed + RETRY_INTERVAL >= totalWaitMs) break;
+    await new Promise(r => setTimeout(r, RETRY_INTERVAL));
   }
+  return false;
 }
 
 // ────────────────────────────────

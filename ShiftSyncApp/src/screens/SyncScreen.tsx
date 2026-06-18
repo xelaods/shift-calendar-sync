@@ -19,9 +19,19 @@ export default function SyncScreen() {
   const [gcalResult, setGcalResult] = useState<SyncResponse | null>(null);
   const [resetResult, setResetResult] = useState<SyncResponse | null>(null);
   const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const [serverWaking, setServerWaking] = useState(false); // 起動中表示用
+  const [wakingElapsed, setWakingElapsed] = useState(0);   // 経過秒数
 
   useEffect(() => {
-    checkHealth().then(ok => setServerOk(ok));
+    setServerWaking(false);
+    setWakingElapsed(0);
+    checkHealth(65_000, (elapsed) => {
+      setServerWaking(true);
+      setWakingElapsed(Math.floor(elapsed / 1000));
+    }).then(ok => {
+      setServerOk(ok);
+      setServerWaking(false);
+    });
     SecureStore.getItemAsync('last_sync').then(v => setLastSync(v));
   }, []);
 
@@ -175,15 +185,36 @@ export default function SyncScreen() {
 
         {/* Server Status */}
         <View style={[styles.serverBadge, {
-          backgroundColor: serverOk === null ? Colors.glassSubtle : serverOk ? Colors.greenLight : Colors.coralLight
+          backgroundColor:
+            serverOk === null   ? Colors.glassSubtle :
+            serverOk            ? Colors.greenLight  : Colors.coralLight
         }]}>
           <Text style={[styles.serverBadgeText, {
-            color: serverOk === null ? Colors.labelSecondary : serverOk ? Colors.green : Colors.coral
+            color:
+              serverOk === null   ? Colors.labelSecondary :
+              serverOk           ? Colors.green           : Colors.coral
           }]}>
-            {serverOk === null ? '⏳ サーバー確認中...' : serverOk ? '🟢 サーバー接続OK' : '🔴 サーバー未接続'}
+            {serverOk === null
+              ? serverWaking
+                ? `⏳ サーバー起動中... (${wakingElapsed}秒)`
+                : '⏳ サーバー確認中...'
+              : serverOk
+              ? '🟢 サーバー接続 OK'
+              : '🔴 接続失敗'}
           </Text>
           {serverOk === false && (
-            <TouchableOpacity onPress={() => checkHealth().then(ok => setServerOk(ok))}>
+            <TouchableOpacity onPress={() => {
+              setServerOk(null);
+              setServerWaking(false);
+              setWakingElapsed(0);
+              checkHealth(65_000, (elapsed) => {
+                setServerWaking(true);
+                setWakingElapsed(Math.floor(elapsed / 1000));
+              }).then(ok => {
+                setServerOk(ok);
+                setServerWaking(false);
+              });
+            }}>
               <Text style={[styles.serverBadgeText, { color: Colors.blue, marginLeft: 8 }]}>再試行</Text>
             </TouchableOpacity>
           )}
