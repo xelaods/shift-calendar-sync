@@ -6,7 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 
 // APIベースURL
 // Render にデプロイされた本番URL（設定画面から変更可能）
-const DEFAULT_API_URL = 'https://shiftsync-api.onrender.com';
+const DEFAULT_API_URL = 'https://shiftsync-api-0ett.onrender.com';
 
 export async function getApiUrl(): Promise<string> {
   const saved = await SecureStore.getItemAsync('api_url');
