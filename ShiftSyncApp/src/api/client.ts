@@ -8,10 +8,33 @@ import * as SecureStore from 'expo-secure-store';
 // Render にデプロイされた本番URL（設定画面から変更可能）
 const DEFAULT_API_URL = 'https://shiftsync-api-0ett.onrender.com';
 
+/**
+ * 保存済みURLを取得する。
+ * ローカルIP（http://192.168.x.x など）が残っていた場合は
+ * 自動で Render URL に修正して保存し直す。
+ */
 export async function getApiUrl(): Promise<string> {
   const saved = await SecureStore.getItemAsync('api_url');
-  return saved || DEFAULT_API_URL;
+  if (!saved) return DEFAULT_API_URL;
+
+  // ローカルIPまたは localhost が保存されていたら自動修正
+  const isLocalUrl =
+    saved.startsWith('http://192.168.') ||
+    saved.startsWith('http://10.') ||
+    saved.startsWith('http://172.') ||
+    saved.startsWith('http://localhost') ||
+    saved.startsWith('http://127.') ||
+    saved === 'https://shiftsync-api.onrender.com'; // 旧URL
+
+  if (isLocalUrl) {
+    console.log('[API] ローカルURLを検出。Render URLに自動修正します:', saved, '->', DEFAULT_API_URL);
+    await SecureStore.setItemAsync('api_url', DEFAULT_API_URL);
+    return DEFAULT_API_URL;
+  }
+
+  return saved;
 }
+
 
 // デフォルトタイムアウト（通常リクエスト: 90秒、ヘルスチェック: 10秒）
 const DEFAULT_TIMEOUT_MS = 90_000;
