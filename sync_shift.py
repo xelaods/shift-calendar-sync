@@ -6,12 +6,19 @@ from datetime import datetime, timedelta
 import json
 import sys
 
+# Windowsコンソールの文字化け・エンコード回避
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 # ============================================================
 #  設定 (環境変数または直接入力)
 # ============================================================
 LOGIN_ID = os.getenv("LOGIN_ID", "0332388")
 PASSWORD = os.getenv("PASSWORD", "hs628496")
-GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL", "https://script.google.com/macros/s/AKfycbxBT5FbQEmSknWIXmZ9UIOC2gQyX92rnBI1KBBGBrysrxxbnVOjgGmW0Kj0QOu44tLX/exec")
+GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL", "https://script.google.com/macros/s/AKfycbxhVGQlXnysiCC_yeYNRz8O5hNd_TI3qwE8dQsvYD_5fFkl5OAHTWnB320jptjapRv9/exec")
 SYNC_DAYS = int(os.getenv("SYNC_DAYS", "30"))
 
 LOGIN_URL = "https://shifucon.ppihgroup.com/staffpage/"
@@ -27,8 +34,8 @@ def get_shift_data():
 
     print("1. ログインページを取得中...")
     res = session.get(LOGIN_URL)
-    if not res.status_code == 200:
-        print(f"[ERROR] ログインページの取得に失敗しました (Status: {res.status_code})")
+    if res.status_code != 200:
+        print(f"❌ ログインページの取得に失敗しました (Status: {res.status_code})")
         return []
 
     soup = BeautifulSoup(res.text, "html.parser")
@@ -36,7 +43,7 @@ def get_shift_data():
     url_elem = soup.find("input", {"name": "url"})
 
     if not transaction_id_elem:
-        print("[ERROR] transactionidの取得に失敗しました")
+        print("❌ transactionidの取得に失敗しました")
         return []
 
     transaction_id = transaction_id_elem.get("value", "")
@@ -54,10 +61,10 @@ def get_shift_data():
 
     login_res = session.post(LOGIN_ACTION_URL, data=payload, allow_redirects=True)
     if "login_email" in login_res.text and "from_hour0" not in login_res.text:
-        print("[ERROR] ログインに失敗しました。IDとパスワードを確認してください。")
+        print("❌ ログインに失敗しました。IDとパスワードを確認してください。")
         return []
 
-    print("[OK] ログイン成功！")
+    print("✅ ログイン成功！")
 
     shifts = []
     target_date = datetime.now()
@@ -121,7 +128,7 @@ def get_shift_data():
                     "time_str": f"{from_h}:{from_m}〜{to_h}:{to_m}"
                 }
                 shifts.append(shift_item)
-                print(f"     [SHIFT] {year}/{month:02d}/{day:02d}: {from_h}:{from_m}〜{to_h}:{to_m}")
+                print(f"     📅 {year}/{month:02d}/{day:02d}: {from_h}:{from_m}〜{to_h}:{to_m}")
 
         if not found_any:
             break
@@ -134,11 +141,12 @@ def get_shift_data():
 
 def sync_to_gas(shifts):
     if not shifts:
-        print("[INFO] 送信するシフトデータがありません")
+        print("⚠️ 送信するシフトデータがありません")
         return
 
     if GAS_WEB_APP_URL == "YOUR_GAS_WEB_APP_URL_HERE" or not GAS_WEB_APP_URL.startswith("https://"):
-        print("\n[ERROR] GASのWebアプリURLが設定されていません。")
+        print("\n❌ GASのWebアプリURLが設定されていません。")
+        print("   sync_shift.py の GAS_WEB_APP_URL にURLを設定してください。")
         return
 
     print(f"\n3. Googleカレンダーへ同期中 ({len(shifts)} 件のシフト)...")
@@ -146,9 +154,9 @@ def sync_to_gas(shifts):
     try:
         data = res.json()
         if data.get("status") == "success":
-            print(f"[SUCCESS] 同期完了！ (新規追加: {data.get('added')}件 / 更新: {data.get('updated')}件)")
+            print(f"🎉 同期完了！ (新規追加: {data.get('added')}件 / 更新: {data.get('updated')}件)")
         else:
-            print(f"[ERROR] 同期エラー: {data.get('message')}")
+            print(f"❌ 同期エラー: {data.get('message')}")
     except Exception as e:
         print(f"Response: {res.text}")
 
