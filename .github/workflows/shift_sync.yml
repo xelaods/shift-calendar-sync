@@ -1,0 +1,35 @@
+name: Auto Shift Sync to Google Calendar
+
+on:
+  # 毎日日本時間 午前7時 (UTC 22:00) に自動実行
+  schedule:
+    - cron: '0 22 * * *'
+  # GitHub上の画面から手動実行も可能にする
+  workflow_dispatch:
+
+jobs:
+  sync-shift:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python環境をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存ライブラリのインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: シフト同期スクリプトの実行
+        env:
+          LOGIN_ID: ${{ secrets.SHIFT_LOGIN_ID }}
+          PASSWORD: ${{ secrets.SHIFT_PASSWORD }}
+          GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
+          SYNC_DAYS: 60
+        run: |
+          python sync_shift.py
