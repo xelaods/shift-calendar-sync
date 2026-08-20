@@ -19,7 +19,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 LOGIN_ID = os.getenv("LOGIN_ID", "0332388")
 PASSWORD = os.getenv("PASSWORD", "hs628496")
 GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL", "https://script.google.com/macros/s/AKfycbxhVGQlXnysiCC_yeYNRz8O5hNd_TI3qwE8dQsvYD_5fFkl5OAHTWnB320jptjapRv9/exec")
-SYNC_DAYS = int(os.getenv("SYNC_DAYS", "30"))
+SYNC_DAYS = int(os.getenv("SYNC_DAYS", "7"))
 
 LOGIN_URL = "https://shifucon.ppihgroup.com/staffpage/"
 LOGIN_ACTION_URL = "https://shifucon.ppihgroup.com/frontparts/login_check.php"
@@ -121,10 +121,11 @@ def get_shift_data():
                 if end_dt <= start_dt:
                     end_dt += timedelta(days=1)
 
+                # +09:00 を付けてGASがJST（日本時間）として正しく解釈できるようにする
                 shift_item = {
                     "date": f"{year:04d}-{month:02d}-{day:02d}",
-                    "start": start_dt.isoformat(),
-                    "end": end_dt.isoformat(),
+                    "start": start_dt.strftime("%Y-%m-%dT%H:%M:00+09:00"),
+                    "end": end_dt.strftime("%Y-%m-%dT%H:%M:00+09:00"),
                     "time_str": f"{from_h}:{from_m}〜{to_h}:{to_m}"
                 }
                 shifts.append(shift_item)
