@@ -9,7 +9,6 @@ on:
 
 jobs:
   sync-shift:
-    # 自宅PCのSelf-hosted Runnerで動かす場合は runs-on: self-hosted
     runs-on: ubuntu-latest
 
     steps:
@@ -24,13 +23,13 @@ jobs:
       - name: 依存ライブラリのインストール
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install selenium beautifulsoup4 requests
 
-      - name: シフト同期スクリプトの実行
+      - name: シフト同期スクリプトの実行 (Selenium Headless Chrome)
         env:
           LOGIN_ID: ${{ secrets.SHIFT_LOGIN_ID }}
           PASSWORD: ${{ secrets.SHIFT_PASSWORD }}
           GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
-          SYNC_DAYS: 5
+          SYNC_DAYS: 7
         run: |
           python sync_shift.py
