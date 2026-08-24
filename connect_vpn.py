@@ -57,8 +57,8 @@ def get_japan_servers():
 def try_connect_vpn(servers, target_ip):
     ovpn_file = "/tmp/vpngate.ovpn" if os.name != "nt" else "vpngate.ovpn"
     
-    for i, s in enumerate(servers[:10]):
-        print(f"\n🔄 [{i+1}/10] 日本VPNサーバー {s['ip']} へのSplit-Tunnel接続を試行中...")
+    for i, s in enumerate(servers[:6]):
+        print(f"\n🔄 [{i+1}/6] 日本VPNサーバー {s['ip']} (スコア:{s['score']}) への接続を試行中...")
         try:
             config_data = base64.b64decode(s["config"]).decode("utf-8", errors="ignore")
         except Exception as e:
@@ -68,7 +68,6 @@ def try_connect_vpn(servers, target_ip):
         config_lines = []
         for line in config_data.split("\n"):
             line_str = line.strip()
-            # 全体ルーティング変更やDNS変更のオプションは除外（GitHub Actionsの通信を維持するため）
             if any(line_str.startswith(opt) for opt in ["redirect-gateway", "block-outside-dns", "dhcp-option", "route-gateway"]):
                 continue
             config_lines.append(line)
@@ -88,19 +87,22 @@ def try_connect_vpn(servers, target_ip):
             time.sleep(1)
 
             subprocess.run(cmd, check=True)
-            print("   トンネル接続確認中...")
+            print("   トンネル確立確認中 (最大6秒)...")
 
-            # 対象サイトへのアクセスをテスト (最大10秒)
-            for attempt in range(10):
+            # 対象サイトへのアクセスをテスト (タイムアウト4秒)
+            for attempt in range(6):
                 time.sleep(1)
-                test_cmd = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", f"https://{TARGET_HOST}/staffpage/"]
+                test_cmd = ["curl", "-s", "--max-time", "4", "-o", "/dev/null", "-w", "%{http_code}", f"https://{TARGET_HOST}/staffpage/"]
                 res = subprocess.run(test_cmd, capture_output=True, text=True)
                 code = res.stdout.strip()
                 if code in ["200", "302"]:
                     print(f"🎉 日本VPN経由でのシフトサイト接続に成功しました！ (Status: {code})")
                     return True
+                elif code == "403":
+                    print(f"   ⚠️ 403 Forbidden (このVPNサーバーはブロックされています)")
+                    break
 
-            print("   ⚠️ 接続確認タイムアウト。次のサーバーを試します。")
+            print("   ⚠️ 接続確立タイムアウト。次のサーバーを試します。")
         except Exception as e:
             print(f"   ❌ エラー: {e}")
 
