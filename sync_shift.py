@@ -67,6 +67,8 @@ def get_shift_data():
 
         # ログインフォーム入力
         print(f"3. ログイン情報入力中 ({LOGIN_ID})...")
+        print(f"   現在のURL: {driver.current_url}")
+        print(f"   タイトル: {driver.title}")
         
         # IDフィールドを探す
         id_elem = None
@@ -97,6 +99,9 @@ def get_shift_data():
                 pass
 
         if not id_elem or not pw_elem:
+            print("--- ページソース (先頭 1000文字) ---")
+            print(driver.page_source[:1000])
+            print("---------------------------------")
             raise RuntimeError("ログインフォームの入力欄が見つかりませんでした")
 
         id_elem.clear()
