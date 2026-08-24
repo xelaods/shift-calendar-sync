@@ -30,6 +30,6 @@ jobs:
           LOGIN_ID: ${{ secrets.SHIFT_LOGIN_ID }}
           PASSWORD: ${{ secrets.SHIFT_PASSWORD }}
           GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
-          SYNC_DAYS: 30
+          SYNC_DAYS: 5
         run: |
           python sync_shift.py

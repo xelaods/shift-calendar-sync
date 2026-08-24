@@ -67,15 +67,16 @@ def get_shift_data():
     print("✅ ログイン成功！")
 
     shifts = []
-    target_date = datetime.now()
-    end_date = target_date + timedelta(days=SYNC_DAYS)
+    today = datetime.now().date()
+    end_date = today + timedelta(days=SYNC_DAYS)
 
-    pages = (SYNC_DAYS // 14) + 2
+    pages = (SYNC_DAYS // 14) + 1
+    current_fetch_date = today
 
     for page in range(pages):
-        date_str = target_date.strftime("%Y%m%d")
+        date_str = current_fetch_date.strftime("%Y%m%d")
         page_url = f"{LOGIN_URL}?select_date={date_str}"
-        print(f"   シフトデータ取得中 ({target_date.strftime('%Y/%m/%d')}〜)...")
+        print(f"   シフトデータ取得中 ({current_fetch_date.strftime('%Y/%m/%d')}〜)...")
 
         page_res = session.get(page_url)
         page_soup = BeautifulSoup(page_res.text, "html.parser")
@@ -94,6 +95,11 @@ def get_shift_data():
             year = int(d_str[:4])
             month = int(d_str[4:6])
             day = int(d_str[6:8])
+            shift_date = datetime(year, month, day).date()
+
+            # 取得日（今日）から SYNC_DAYS 日間の範囲外はスキップ
+            if not (today <= shift_date < end_date):
+                continue
 
             holiday_type_elem = page_soup.find("input", {"id": f"holiday_type{i}"}) or page_soup.find("input", {"name": f"holiday_type{i}"})
             from_h_elem = page_soup.find("input", {"id": f"from_hour{i}"}) or page_soup.find("input", {"name": f"from_hour{i}"})
@@ -134,8 +140,8 @@ def get_shift_data():
         if not found_any:
             break
 
-        target_date += timedelta(days=14)
-        if target_date > end_date:
+        current_fetch_date += timedelta(days=14)
+        if current_fetch_date >= end_date:
             break
 
     return shifts
@@ -166,4 +172,6 @@ if __name__ == "__main__":
     shifts = get_shift_data()
     if shifts:
         sync_to_gas(shifts)
+    else:
+        print(f"ℹ️ 本日より {SYNC_DAYS} 日間の対象シフトはありませんでした。")
     print("=== 終了 ===")
