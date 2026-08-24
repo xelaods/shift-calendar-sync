@@ -5,8 +5,19 @@ import subprocess
 import time
 import sys
 import os
+import socket
 
 VPN_GATE_API = "http://www.vpngate.net/api/iphone/"
+TARGET_HOST = "shifucon.ppihgroup.com"
+
+def get_target_ip():
+    try:
+        ip = socket.gethostbyname(TARGET_HOST)
+        print(f"🎯 対象サーバー: {TARGET_HOST} -> {ip}")
+        return ip
+    except Exception as e:
+        print(f"⚠️ DNS解決失敗: {e}, デフォルトIPを使用します")
+        return "220.100.235.20"
 
 def get_japan_servers():
     print("📡 VPN Gateから日本のサーバーリストを取得中...")
@@ -38,63 +49,60 @@ def get_japan_servers():
                 except Exception:
                     continue
 
-    # スピード・スコア順にソート
+    # スコア・スピード順にソート
     servers.sort(key=lambda x: (x["score"], x["speed"]), reverse=True)
     print(f"✅ {len(servers)} 件の日本VPNサーバーが見つかりました。")
     return servers
 
-def try_connect_vpn(servers):
+def try_connect_vpn(servers, target_ip):
     ovpn_file = "/tmp/vpngate.ovpn" if os.name != "nt" else "vpngate.ovpn"
     
     for i, s in enumerate(servers[:10]):
-        print(f"\n🔄 [{i+1}/10] VPNサーバー {s['ip']} への接続を試行中...")
+        print(f"\n🔄 [{i+1}/10] 日本VPNサーバー {s['ip']} へのSplit-Tunnel接続を試行中...")
         try:
             config_data = base64.b64decode(s["config"]).decode("utf-8", errors="ignore")
         except Exception as e:
-            print(f"   設定のデコードエラー: {e}")
+            print(f"   設定デコードエラー: {e}")
             continue
 
-        # IPv6や一部の競合オプションを調整
         config_lines = []
         for line in config_data.split("\n"):
-            if line.strip().startswith("proto ") or line.strip().startswith("remote ") or line.strip().startswith("cipher ") or line.strip().startswith("auth "):
-                config_lines.append(line)
-            elif not (line.strip().startswith("block-outside-dns") or line.strip().startswith("redirect-gateway-bypass")):
-                config_lines.append(line)
+            line_str = line.strip()
+            # 全体ルーティング変更やDNS変更のオプションは除外（GitHub Actionsの通信を維持するため）
+            if any(line_str.startswith(opt) for opt in ["redirect-gateway", "block-outside-dns", "dhcp-option", "route-gateway"]):
+                continue
+            config_lines.append(line)
 
-        # Linux用オプション
+        # Split-Tunneling 設定（対象のシフトサーバー通信のみVPN経由にする）
         if os.name != "nt":
-            config_lines.append("redirect-gateway def1")
-            config_lines.append("dhcp-option DNS 8.8.8.8")
+            config_lines.append("route-nopull")
+            config_lines.append(f"route {target_ip} 255.255.255.255")
 
         with open(ovpn_file, "w", encoding="utf-8") as f:
             f.write("\n".join(config_lines))
 
-        # OpenVPN プロセス起動
+        # OpenVPN 起動
         cmd = ["sudo", "openvpn", "--config", ovpn_file, "--daemon", "--writepid", "/tmp/openvpn.pid"]
         try:
-            # 既存のopenvpnがあれば停止
             subprocess.run(["sudo", "killall", "openvpn"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             time.sleep(1)
 
             subprocess.run(cmd, check=True)
-            print("   接続待機中 (最大12秒)...")
+            print("   トンネル接続確認中...")
 
-            # 接続完了待ち（IP確認）
-            for _ in range(12):
+            # 対象サイトへのアクセスをテスト (最大10秒)
+            for attempt in range(10):
                 time.sleep(1)
-                try:
-                    res = urllib.request.urlopen("https://ifconfig.me/ip", timeout=3)
-                    new_ip = res.read().decode().strip()
-                    if new_ip:
-                        print(f"🎉 日本VPN経由での接続に成功しました！ 現在のIP: {new_ip}")
-                        return True
-                except Exception:
-                    pass
+                test_cmd = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", f"https://{TARGET_HOST}/staffpage/"]
+                res = subprocess.run(test_cmd, capture_output=True, text=True)
+                code = res.stdout.strip()
+                if code in ["200", "302"]:
+                    print(f"🎉 日本VPN経由でのシフトサイト接続に成功しました！ (Status: {code})")
+                    return True
 
-            print("   ⚠️ タイムアウト: 接続が確立しませんでした。")
+            print("   ⚠️ 接続確認タイムアウト。次のサーバーを試します。")
         except Exception as e:
-            print(f"   ❌ OpenVPN起動エラー: {e}")
+            print(f"   ❌ エラー: {e}")
 
     return False
 
@@ -103,12 +111,13 @@ if __name__ == "__main__":
         print("⚠️ このスクリプトは GitHub Actions (Linux) 用です。")
         sys.exit(0)
 
+    target_ip = get_target_ip()
     servers = get_japan_servers()
     if not servers:
         print("❌ 利用可能な日本VPNサーバーが見つかりませんでした。")
         sys.exit(1)
 
-    success = try_connect_vpn(servers)
+    success = try_connect_vpn(servers, target_ip)
     if not success:
         print("❌ 日本VPNへの接続に失敗しました。")
         sys.exit(1)
