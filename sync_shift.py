@@ -19,7 +19,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 LOGIN_ID = os.getenv("LOGIN_ID", "0332388")
 PASSWORD = os.getenv("PASSWORD", "hs628496")
 GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL", "https://script.google.com/macros/s/AKfycbxhVGQlXnysiCC_yeYNRz8O5hNd_TI3qwE8dQsvYD_5fFkl5OAHTWnB320jptjapRv9/exec")
-SYNC_DAYS = int(os.getenv("SYNC_DAYS", "5"))
+SYNC_DAYS = int(os.getenv("SYNC_DAYS", "30"))
 
 LOGIN_URL = "https://shifucon.ppihgroup.com/staffpage/"
 LOGIN_ACTION_URL = "https://shifucon.ppihgroup.com/frontparts/login_check.php"
@@ -80,6 +80,7 @@ def get_shift_data():
     print("✅ ログイン成功！")
 
     shifts = []
+    seen_dates = set()
     today = datetime.now().date()
     end_date = today + timedelta(days=SYNC_DAYS)
 
@@ -114,6 +115,10 @@ def get_shift_data():
             if not (today <= shift_date < end_date):
                 continue
 
+            date_key = f"{year:04d}-{month:02d}-{day:02d}"
+            if date_key in seen_dates:
+                continue
+
             holiday_type_elem = page_soup.find("input", {"id": f"holiday_type{i}"}) or page_soup.find("input", {"name": f"holiday_type{i}"})
             from_h_elem = page_soup.find("input", {"id": f"from_hour{i}"}) or page_soup.find("input", {"name": f"from_hour{i}"})
             from_m_elem = page_soup.find("input", {"id": f"from_minutes{i}"}) or page_soup.find("input", {"name": f"from_minutes{i}"})
@@ -140,9 +145,11 @@ def get_shift_data():
                 if end_dt <= start_dt:
                     end_dt += timedelta(days=1)
 
+                seen_dates.add(date_key)
+
                 # +09:00 を付けてGASがJST（日本時間）として正しく解釈できるようにする
                 shift_item = {
-                    "date": f"{year:04d}-{month:02d}-{day:02d}",
+                    "date": date_key,
                     "start": start_dt.strftime("%Y-%m-%dT%H:%M:00+09:00"),
                     "end": end_dt.strftime("%Y-%m-%dT%H:%M:00+09:00"),
                     "time_str": f"{from_h}:{from_m}〜{to_h}:{to_m}"
