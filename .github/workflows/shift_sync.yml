@@ -25,27 +25,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 curl_cffi
 
-      - name: 接続診断 (IP・ヘッダー・TLS検証)
+      - name: OpenVPNのインストール
         run: |
-          echo "=== 1. Actions RunnerのIPアドレス確認 ==="
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openvpn
+
+      - name: 日本VPNへの接続 (Geo-blocking回避)
+        run: |
+          python connect_vpn.py
+
+      - name: 接続後のIPアドレス確認
+        run: |
+          echo "現在のグローバルIP:"
           curl -s https://ifconfig.me
           echo ""
-
-          echo "=== 2. 通常のcurlリクエスト ==="
-          curl -I -s https://shifucon.ppihgroup.com/staffpage/ || true
-
-          echo "=== 3. 完全なブラウザ偽装ヘッダー付きcurl ==="
-          curl -I -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36" -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" -H "Accept-Language: ja,en-US;q=0.9,en;q=0.8" https://shifucon.ppihgroup.com/staffpage/ || true
-
-          echo "=== 4. curl_cffi (Chrome TLSフィンガープリント) によるテスト ==="
-          python -c "
-          from curl_cffi import requests
-          try:
-              r = requests.get('https://shifucon.ppihgroup.com/staffpage/', impersonate='chrome120', timeout=10)
-              print(f'curl_cffi Status: {r.status_code}')
-          except Exception as e:
-              print(f'curl_cffi Error: {e}')
-          " || true
 
       - name: シフト同期スクリプトの実行
         env:
