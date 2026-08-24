@@ -33,10 +33,18 @@ def get_shift_data():
     })
 
     print("1. ログインページを取得中...")
-    res = session.get(LOGIN_URL)
+    try:
+        res = session.get(LOGIN_URL, timeout=15)
+    except Exception as e:
+        print(f"❌ ログインページへの接続に失敗しました: {e}")
+        sys.exit(1)
+
     if res.status_code != 200:
         print(f"❌ ログインページの取得に失敗しました (Status: {res.status_code})")
-        return []
+        if res.status_code == 403:
+            print("   ⚠️ 403 Forbidden: シフト管理サイトが海外IPやクラウド環境（GitHub Actions等）からのアクセスを制限している可能性があります。")
+            print("   👉 日本国内のPC・回線から run_sync.bat を実行してください。")
+        sys.exit(1)
 
     soup = BeautifulSoup(res.text, "html.parser")
     transaction_id_elem = soup.find("input", {"name": "transactionid"})
@@ -44,7 +52,7 @@ def get_shift_data():
 
     if not transaction_id_elem:
         print("❌ transactionidの取得に失敗しました")
-        return []
+        sys.exit(1)
 
     transaction_id = transaction_id_elem.get("value", "")
     url_val = url_elem.get("value", "") if url_elem else ""
@@ -59,10 +67,15 @@ def get_shift_data():
         "is_tablet": ""
     }
 
-    login_res = session.post(LOGIN_ACTION_URL, data=payload, allow_redirects=True)
+    try:
+        login_res = session.post(LOGIN_ACTION_URL, data=payload, allow_redirects=True, timeout=15)
+    except Exception as e:
+        print(f"❌ ログイン通信中にエラーが発生しました: {e}")
+        sys.exit(1)
+
     if "login_email" in login_res.text and "from_hour0" not in login_res.text:
         print("❌ ログインに失敗しました。IDとパスワードを確認してください。")
-        return []
+        sys.exit(1)
 
     print("✅ ログイン成功！")
 
