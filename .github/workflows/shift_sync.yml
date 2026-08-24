@@ -9,6 +9,7 @@ on:
 
 jobs:
   sync-shift:
+    # 自宅PCのSelf-hosted Runnerで動かす場合は runs-on: self-hosted
     runs-on: ubuntu-latest
 
     steps:
@@ -23,22 +24,7 @@ jobs:
       - name: 依存ライブラリのインストール
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 curl_cffi
-
-      - name: OpenVPNのインストール
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq openvpn
-
-      - name: 日本VPNへの接続 (Geo-blocking回避)
-        run: |
-          python connect_vpn.py
-
-      - name: 接続後のIPアドレス確認
-        run: |
-          echo "現在のグローバルIP:"
-          curl -s https://ifconfig.me
-          echo ""
+          pip install requests beautifulsoup4
 
       - name: シフト同期スクリプトの実行
         env:
